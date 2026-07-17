@@ -3,8 +3,8 @@ import type { DashboardConfig } from '@/types/dashboard';
 const config: DashboardConfig = {
   "clientId": "4b53fb97fe44cde2b9e8fdea99e36b0b",
   "clientName": "Advocate Of Shalom",
-  "clientDomain": "advocateofshalom.net",
-  "clientEmail": "eparker@advocateofshalom.net",
+  "clientDomain": "advocateofshalom.com",
+  "clientEmail": "navigator@advocateofshalom.com",
   "enabledWidgets": [
     "links",
     "siteAnalytics"
@@ -13,7 +13,7 @@ const config: DashboardConfig = {
   "links": [
     {
       "label": "Live Site",
-      "url": "https://advocateofshalom.net",
+      "url": "https://advocateofshalom.com",
       "emoji": "🌐"
     },
     {
