@@ -31,7 +31,7 @@ const config: DashboardConfig = {
   },
   "analytics": {
     "provider": "simple-analytics",
-    "simpleAnalyticsId": "sa.advocateofshalom.com",
+    "simpleAnalyticsId": "advocateofshalom.com",
     "internalRoutes": [
       "/analytics",
       "/billing",
@@ -41,7 +41,7 @@ const config: DashboardConfig = {
     "conversionPage": "/contact"
   },
   "contentKit": {
-    "enabled": true,
+    "enabled": false,
     "sections": [
       {
         "id": "your_business",
