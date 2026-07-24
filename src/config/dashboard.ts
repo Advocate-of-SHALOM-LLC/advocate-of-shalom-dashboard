@@ -17,10 +17,31 @@ const config: DashboardConfig = {
       "emoji": "🌐"
     },
     {
+      "label": "Facebook",
+      "url": "https://facebook.com/advocateofshalom",
+      "emoji": "📘"
+    },
+    {
+      "label": "LinkedIn",
+      "url": "https://www.linkedin.com/company/advocate-of-shalom",
+      "emoji": "💼"
+    },
+    {
+      "label": "Google Profile",
+      "url": "https://maps.app.goo.gl/QWLh2kmJxwAxdG2i6",
+      "emoji": "📍"
+    },
+    {
       "label": "Sanity Studio",
       "url": "https://studio.advocateofshalom.com",
       "emoji": "✏️",
       "description": "Edit your content"
+    },
+    {
+      "label": "Netlify Site",
+      "url": "https://app.netlify.com/projects/advocate-of-shalom",
+      "emoji": "🚀",
+      "description": "Deploy history and site logs"
     }
   ],
   "contentEditors": [],
