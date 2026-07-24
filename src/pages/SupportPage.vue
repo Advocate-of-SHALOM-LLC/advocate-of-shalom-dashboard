@@ -5,7 +5,7 @@ import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import { Send, CheckCircle } from 'lucide-vue-next';
 import config from '@/config/dashboard';
 
-const { user } = useAuth0();
+const { user, getAccessTokenSilently } = useAuth0();
 
 const form = ref({
   name: user.value?.name || '',
@@ -22,6 +22,7 @@ const error = ref<string | null>(null);
 const CATEGORIES = [
   { value: 'bug', label: 'Bug Report' },
   { value: 'update', label: 'Update Request' },
+  { value: 'feature', label: 'Feature Request' },
   { value: 'question', label: 'Question' },
   { value: 'other', label: 'Other' },
 ];
@@ -40,10 +41,14 @@ async function submit() {
   };
 
   try {
-    // Primary: Netlify function
+    const token = await getAccessTokenSilently();
+
     const res = await fetch('/.netlify/functions/receive-support-request', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(payload),
     });
 
