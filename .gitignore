@@ -8,3 +8,9 @@ dist/
 
 # Local Netlify folder
 .netlify
+
+# macOS
+.DS_Store
+
+# Deno artifact — this project uses pnpm; deno.lock is a stray from VSCode
+deno.lock
