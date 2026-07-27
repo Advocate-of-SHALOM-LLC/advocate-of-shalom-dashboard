@@ -55,6 +55,19 @@ export interface AnalyticsConfig {
   conversionPage?: string;
 }
 
+export interface DashboardAnnouncement {
+  /** Body text shown to the client. Keep it short — one or two sentences. */
+  message: string;
+  /**
+   * Visual weight. 'info' = neutral, 'success' = new-feature/positive,
+   * 'warning' = heads-up (scheduled maintenance, etc.), 'critical' = incident.
+   * Defaults to 'info'.
+   */
+  level?: 'info' | 'success' | 'warning' | 'critical';
+  /** Optional CTA appended to the message (e.g. "Learn more"). */
+  link?: { label: string; url: string };
+}
+
 export interface DashboardConfig {
   clientId: string;
   clientName: string;
@@ -66,6 +79,12 @@ export interface DashboardConfig {
    * the first letter of clientName.
    */
   clientLogo?: string;
+  /**
+   * Optional banner rendered above the Overview widgets. Push messages
+   * to the client by setting this and committing — no runtime API needed.
+   * Set to undefined (or remove) to hide it.
+   */
+  announcement?: DashboardAnnouncement;
   enabledWidgets: string[];
   tutorialVideos: TutorialVideo[];
   links: DashboardLink[];
