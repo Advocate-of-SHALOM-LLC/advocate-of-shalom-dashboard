@@ -27,7 +27,9 @@
   --color-surface: #1f2a39;
   --color-text: #f3f4f6;
   --color-text-secondary: #d1d5db;
-  --color-text-inverse: #111827;
+  /* Text on --color-primary — primary stays dark blue in both modes,
+     so this must stay white regardless of light/dark. */
+  --color-text-inverse: #ffffff;
   --color-border: #354153;
   --color-sidebar-bg: #091220;
   --color-sidebar-text: #d1d5db;
