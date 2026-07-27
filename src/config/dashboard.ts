@@ -5,6 +5,7 @@ const config: DashboardConfig = {
   "clientName": "Advocate Of Shalom",
   "clientDomain": "advocateofshalom.com",
   "clientEmail": "navigator@advocateofshalom.com",
+  "clientLogo": "/apple-touch-icon.png",
   "enabledWidgets": [
     "links",
     "siteAnalytics"

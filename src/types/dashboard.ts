@@ -76,6 +76,12 @@ export interface DashboardConfig {
   clientName: string;
   clientDomain: string;
   clientEmail: string;
+  /**
+   * Path (from public/) to a square logo/icon rendered in the sidebar.
+   * When omitted, the sidebar falls back to a colored circle showing
+   * the first letter of clientName.
+   */
+  clientLogo?: string;
   enabledWidgets: string[];
   tutorialVideos: TutorialVideo[];
   links: DashboardLink[];
