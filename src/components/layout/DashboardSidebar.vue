@@ -9,6 +9,7 @@ import { useAuth0 } from '@auth0/auth0-vue';
 import {
   LayoutDashboard,
   BarChart3,
+  Megaphone,
   MessageSquare,
   CreditCard,
   UserCircle,
@@ -42,6 +43,7 @@ interface NavItem { to: string; label: string; icon: unknown }
 const navItems: NavItem[] = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/social', label: 'Social Media', icon: Megaphone },
   { to: '/support', label: 'Contact & Support', icon: MessageSquare },
   { to: '/billing', label: 'Billing', icon: CreditCard },
 ];
@@ -59,8 +61,17 @@ const navItems: NavItem[] = [
     <div class="sidebar__brand" :class="collapsed ? 'sidebar__brand--collapsed' : ''">
       <div
         class="sidebar__avatar"
-        :style="{ backgroundColor: 'var(--color-sidebar-active, var(--color-primary))' }"
-      >{{ config.clientName.charAt(0) }}</div>
+        :class="{ 'sidebar__avatar--logo': !!config.clientLogo }"
+        :style="config.clientLogo ? {} : { backgroundColor: 'var(--color-sidebar-active, var(--color-primary))' }"
+      >
+        <img
+          v-if="config.clientLogo"
+          :src="config.clientLogo"
+          :alt="`${config.clientName} logo`"
+          class="sidebar__avatar-img"
+        />
+        <template v-else>{{ config.clientName.charAt(0) }}</template>
+      </div>
       <div v-if="!collapsed" class="sidebar__brand-text">
         <p class="sidebar__client-name">{{ config.clientName }}</p>
         <p class="sidebar__label">Dashboard</p>
@@ -192,6 +203,19 @@ const navItems: NavItem[] = [
   font-size: 0.875rem;
   font-weight: 700;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.sidebar__avatar--logo {
+  /* Let the image fill the square with no colored background */
+  background-color: transparent;
+}
+
+.sidebar__avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .sidebar__brand-text {
