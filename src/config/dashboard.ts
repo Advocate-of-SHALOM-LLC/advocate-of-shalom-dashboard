@@ -6,6 +6,11 @@ const config: DashboardConfig = {
   "clientDomain": "advocateofshalom.com",
   "clientEmail": "navigator@advocateofshalom.com",
   "clientLogo": "/apple-touch-icon.png",
+  "announcement": {
+    "message": "A payment method is needed to enable auto-pay for your subscription. Add a card from the Billing page.",
+    "level": "warning",
+    "link": { "label": "Go to Billing", "url": "/billing" }
+  },
   "enabledWidgets": [
     "links",
     "siteAnalytics"
