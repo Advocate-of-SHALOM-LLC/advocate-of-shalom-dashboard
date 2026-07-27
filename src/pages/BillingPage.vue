@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import {
@@ -12,6 +13,7 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  LifeBuoy,
 } from 'lucide-vue-next';
 import config from '@/config/dashboard';
 
@@ -244,7 +246,7 @@ onMounted(fetchBillingSummary);
         </div>
 
         <div v-else class="billing-card__empty">
-          <p>No pending charges</p>
+          <p>You're all caught up. No pending charges.</p>
         </div>
       </div>
 
@@ -318,14 +320,36 @@ onMounted(fetchBillingSummary);
         </div>
 
         <div v-else class="billing-card__empty">
-          <p>No payment method on file</p>
-          <button class="billing-btn billing-btn--primary" @click="openPortal">
-            <CreditCard :size="16" />
-            Add Payment Method
-          </button>
+          <template v-if="billing?.collectionMethod === 'invoice'">
+            <p>
+              You're on invoice billing — invoices are sent to your email each
+              period and paid from the link. No card required.
+            </p>
+            <button class="billing-btn billing-btn--primary" @click="openPortal">
+              <CreditCard :size="16" />
+              Switch to Auto-pay (Add Card)
+            </button>
+          </template>
+          <template v-else-if="subscription?.status === 'active'">
+            <p>No payment method on file</p>
+            <button class="billing-btn billing-btn--primary" @click="openPortal">
+              <CreditCard :size="16" />
+              Add Payment Method
+            </button>
+          </template>
+          <template v-else>
+            <p>No card needed while your subscription is inactive.</p>
+          </template>
         </div>
       </div>
     </div>
+
+    <!-- Support footer — persistent across loading/error/content states -->
+    <p class="billing-support-link">
+      <LifeBuoy :size="14" />
+      Questions about your billing?
+      <RouterLink to="/support" class="billing-support-link__link">Contact support →</RouterLink>
+    </p>
   </DashboardLayout>
 </template>
 
@@ -334,6 +358,26 @@ onMounted(fetchBillingSummary);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 1.25rem;
+}
+
+.billing-support-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary, var(--color-text));
+}
+
+.billing-support-link__link {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.billing-support-link__link:hover {
+  text-decoration: underline;
 }
 
 .billing-card {

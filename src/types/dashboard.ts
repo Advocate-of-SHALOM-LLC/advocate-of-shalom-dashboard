@@ -33,6 +33,14 @@ export interface BillingConfig {
   stripeCustomerId: string;
   showPendingCharges: boolean;
   showOfflineInvoices: boolean;
+  /**
+   * How this client is billed. 'auto' = Stripe charges a card automatically
+   * on renewal (the standard path). 'invoice' = Stripe emails an invoice
+   * each period and the client pays from the hosted URL — no card required,
+   * but they can still opt into auto-pay by adding one via the portal.
+   * Defaults to 'auto' when omitted.
+   */
+  collectionMethod?: 'auto' | 'invoice';
 }
 
 export interface AnalyticsConfig {

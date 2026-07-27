@@ -48,7 +48,8 @@ const config: DashboardConfig = {
   "billing": {
     "stripeCustomerId": "cus_UVmyRmEDdIrC1H",
     "showPendingCharges": true,
-    "showOfflineInvoices": true
+    "showOfflineInvoices": true,
+    "collectionMethod": "invoice"
   },
   "analytics": {
     "provider": "simple-analytics",
