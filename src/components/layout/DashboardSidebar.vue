@@ -27,7 +27,13 @@ const emit = defineEmits<{ (e: 'toggle-mobile'): void }>();
 const route = useRoute();
 const { user, logout } = useAuth0();
 const collapsed = ref(false);
-const darkMode = ref(false);
+// Read initial state from the attribute the inline script in index.html
+// already set — that keeps this ref in sync with the actual rendered theme
+// and avoids a mismatched Sun/Moon icon on refresh.
+const darkMode = ref(
+  typeof document !== 'undefined' &&
+    document.documentElement.getAttribute('data-theme') === 'dark'
+);
 
 function doLogout() {
   logout({ logoutParams: { returnTo: window.location.origin } });
@@ -35,7 +41,11 @@ function doLogout() {
 
 function toggleDarkMode() {
   darkMode.value = !darkMode.value;
-  document.documentElement.setAttribute('data-theme', darkMode.value ? 'dark' : 'light');
+  const theme = darkMode.value ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', theme);
+  try {
+    localStorage.setItem('theme', theme);
+  } catch { /* localStorage blocked (private mode, etc.); toggle still works for this session */ }
 }
 
 interface NavItem { to: string; label: string; icon: unknown }
