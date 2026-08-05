@@ -74,6 +74,13 @@ export interface DashboardConfig {
   clientDomain: string;
   clientEmail: string;
   /**
+   * Primary contact person for this client — used as the default Name in
+   * the Support form so submissions default to the client's canonical
+   * point of contact, not whoever happens to be logged in for testing.
+   * Team members can override it in the form before submitting.
+   */
+  clientContactName?: string;
+  /**
    * Path (from public/) to a square logo/icon rendered in the sidebar.
    * When omitted, the sidebar falls back to a colored circle showing
    * the first letter of clientName.

@@ -7,9 +7,26 @@ import config from '@/config/dashboard';
 
 const { user, getAccessTokenSilently } = useAuth0();
 
+// Auth0 often sets user.name to the email itself when the profile has no
+// display name — that leaks the logged-in user's address into the Name
+// field. Skip user.name when it looks like an email so the form falls
+// through to the client's canonical contact.
+const auth0DisplayName = (() => {
+  const raw = user.value?.name?.trim();
+  return raw && !raw.includes('@') ? raw : '';
+})();
+
 const form = ref({
-  name: user.value?.name || '',
-  email: user.value?.email || config.clientEmail || '',
+  // Default to the client's primary contact name so submissions read
+  // like they're from the client, not from whoever's logged in for
+  // testing. Falls back to a real Auth0 display name if configured.
+  name: config.clientContactName || auth0DisplayName || '',
+  // Default to the client org's canonical email so the reply-to lands
+  // in the shared inbox by default. A team member can still override it
+  // (e.g. to their own address) before submitting if they want a direct
+  // reply thread. The Auth0 email is the fallback for the (rare) case
+  // where config.clientEmail is missing.
+  email: config.clientEmail || user.value?.email || '',
   subject: '',
   category: 'question',
   message: '',

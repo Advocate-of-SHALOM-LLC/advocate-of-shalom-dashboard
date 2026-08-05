@@ -4,7 +4,8 @@ const config: DashboardConfig = {
   "clientId": "4b53fb97fe44cde2b9e8fdea99e36b0b",
   "clientName": "Advocate Of Shalom",
   "clientDomain": "advocateofshalom.com",
-  "clientEmail": "navigator@advocateofshalom.com",
+  "clientEmail": "elyse@advocateofshalom.com",
+  "clientContactName": "Elyse",
   "clientLogo": "/apple-touch-icon.png",
   "announcement": {
     "message": "A payment method is needed to enable auto-pay for your subscription. Add a card from the Billing page.",
