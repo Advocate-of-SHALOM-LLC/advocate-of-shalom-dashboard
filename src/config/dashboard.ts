@@ -8,9 +8,9 @@ const config: DashboardConfig = {
   "clientContactName": "Elyse",
   "clientLogo": "/apple-touch-icon.png",
   "announcement": {
-    "message": "A payment method is needed to enable auto-pay for your subscription. Add a card from the Billing page.",
-    "level": "warning",
-    "link": { "label": "Go to Billing", "url": "/billing" }
+    "message": "You can now pay upcoming installments ahead of schedule from the Billing page.",
+    "level": "info",
+    "link": { "label": "See installments", "url": "/billing" }
   },
   "enabledWidgets": [
     "links",
