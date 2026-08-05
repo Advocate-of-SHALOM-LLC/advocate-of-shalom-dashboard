@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
@@ -14,6 +14,8 @@ import {
   XCircle,
   RefreshCw,
   LifeBuoy,
+  CalendarClock,
+  Zap,
 } from 'lucide-vue-next';
 import config from '@/config/dashboard';
 
@@ -54,11 +56,31 @@ interface PaymentMethod {
   expYear: number;
 }
 
+// Installment shape matches the upstream Client Dashboard contract
+// (docs/installment-billing-handoff.md §4). Dates arrive as YYYY-MM-DD
+// strings, not Unix timestamps like the rest of the billing objects.
+interface Installment {
+  n: number;
+  amountCents: number;
+  currency: string;
+  dueDate: string;
+  status: 'paid' | 'upcoming' | 'overdue';
+  paidOn?: string | null;
+  stripeInvoiceId?: string | null;
+}
+
 const subscription = ref<Subscription | null>(null);
 const pendingCharges = ref<Invoice[]>([]);
 const recentPayments = ref<Invoice[]>([]);
 const paymentMethod = ref<PaymentMethod | null>(null);
 const portalLoading = ref(false);
+
+const installments = ref<Installment[]>([]);
+const installmentsLoading = ref(true);
+const installmentsError = ref<string | null>(null);
+// Track which installment is mid-issue so we can disable + spinner just
+// that row instead of the whole card.
+const payingInstallmentN = ref<number | null>(null);
 
 function formatCurrency(amount: number, currency = 'usd') {
   return new Intl.NumberFormat('en-US', {
@@ -69,6 +91,29 @@ function formatCurrency(amount: number, currency = 'usd') {
 
 function formatDate(timestamp: number) {
   return new Date(timestamp * 1000).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+// Installment dueDate is a YYYY-MM-DD string, not a Unix timestamp.
+// Interpret as local date so display isn't off-by-a-day for negative UTC
+// offsets ("2026-08-11" reading as Aug 10 evening).
+// Safe JSON.parse — returns null on failure so callers can decide what
+// error to raise instead of catching a JSON.parse SyntaxError directly.
+function safeParseJson(text: string): any {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+function formatIsoDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -92,9 +137,24 @@ async function fetchBillingSummary() {
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
-    if (!res.ok) throw new Error('Failed to load billing data');
+    // Same defensive parsing as fetchInstallments — distinguish HTML
+    // fallback (netlify dev didn't load the function) from real JSON errors.
+    const text = await res.text();
+    const looksLikeHtml = text.trim().startsWith('<');
 
-    const data = await res.json();
+    if (looksLikeHtml) {
+      throw new Error(
+        `Stripe billing endpoint returned HTML (status ${res.status}). Netlify dev may not have loaded stripe-get-billing-summary — restart it.`
+      );
+    }
+
+    if (!res.ok) {
+      const errData = safeParseJson(text);
+      throw new Error(errData?.error || `Failed to load billing data (${res.status})`);
+    }
+
+    const data = safeParseJson(text);
+    if (!data) throw new Error('Stripe billing endpoint returned unparseable JSON.');
     if (!data.success) throw new Error(data.error || 'Unknown error');
 
     subscription.value = data.subscription;
@@ -105,6 +165,93 @@ async function fetchBillingSummary() {
     error.value = err instanceof Error ? err.message : 'Failed to load billing data';
   } finally {
     loading.value = false;
+  }
+}
+
+async function fetchInstallments() {
+  if (!billing?.stripeCustomerId) {
+    installmentsLoading.value = false;
+    return;
+  }
+
+  installmentsLoading.value = true;
+  installmentsError.value = null;
+
+  try {
+    const token = await getAccessTokenSilently();
+    const res = await fetch(
+      `/.netlify/functions/get-installment-schedule?stripeCustomerId=${billing.stripeCustomerId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    // Read the body as text first so we can tell "server sent HTML" (which
+    // happens when netlify dev hasn't registered the function and the SPA
+    // fallback serves index.html) from "server sent bad JSON". Otherwise
+    // the user sees an opaque JSON.parse error with no clue why.
+    const text = await res.text();
+    const looksLikeHtml = text.trim().startsWith('<');
+
+    if (!res.ok) {
+      if (looksLikeHtml) {
+        throw new Error(
+          `Installment schedule endpoint returned HTML (status ${res.status}). Netlify dev may not have loaded the function — restart it and try again.`
+        );
+      }
+      const data = safeParseJson(text);
+      throw new Error(data?.error || `Failed to load schedule (${res.status})`);
+    }
+
+    if (looksLikeHtml) {
+      throw new Error(
+        'Installment schedule endpoint returned HTML instead of JSON. The /.netlify/functions/get-installment-schedule route isn\'t registered — restart netlify dev.'
+      );
+    }
+
+    const data = safeParseJson(text);
+    if (!data) throw new Error('Installment schedule endpoint returned unparseable JSON.');
+    installments.value = data.installments || [];
+  } catch (err) {
+    installmentsError.value = err instanceof Error ? err.message : 'Failed to load installments';
+  } finally {
+    installmentsLoading.value = false;
+  }
+}
+
+async function payInstallmentEarly(n: number) {
+  if (!billing?.stripeCustomerId || payingInstallmentN.value !== null) return;
+
+  payingInstallmentN.value = n;
+  try {
+    const token = await getAccessTokenSilently();
+    const res = await fetch('/.netlify/functions/issue-installment-invoice', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        stripeCustomerId: billing.stripeCustomerId,
+        installmentNumber: n,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.hostedInvoiceUrl) {
+      throw new Error(data.error || 'Could not issue invoice');
+    }
+
+    // Open Stripe's hosted invoice URL in a new tab. The user pays there;
+    // the Stripe webhook (Client Dashboard side) marks paid + voids the
+    // corresponding subscription-generated invoice.
+    window.open(data.hostedInvoiceUrl, '_blank');
+
+    // Refetch after a beat so a fresh "issued but unpaid" invoice shows
+    // the right state on return, and any newly-paid one flips to paid.
+    setTimeout(() => { fetchInstallments(); }, 2000);
+  } catch (err) {
+    installmentsError.value = err instanceof Error ? err.message : 'Failed to open invoice';
+  } finally {
+    payingInstallmentN.value = null;
   }
 }
 
@@ -139,7 +286,23 @@ async function openPortal() {
   }
 }
 
-onMounted(fetchBillingSummary);
+// Computed: upcoming or overdue rows only. Paid installments already live
+// in the Recent Payments card, so no need to duplicate them here.
+const upcomingInstallments = computed(() =>
+  installments.value.filter((i) => i.status !== 'paid')
+);
+
+// Card is silent when the customer isn't on installments (empty list) —
+// keeps the page clean for non-installment clients. Loading and error
+// states still render so we don't ghost the user during setup.
+const showInstallmentsCard = computed(
+  () => installmentsLoading.value || installmentsError.value || upcomingInstallments.value.length > 0
+);
+
+onMounted(() => {
+  fetchBillingSummary();
+  fetchInstallments();
+});
 </script>
 
 <template>
@@ -213,6 +376,73 @@ onMounted(fetchBillingSummary);
 
         <div v-else class="billing-card__empty">
           <p>No active subscription</p>
+        </div>
+      </div>
+
+      <!-- Upcoming Installments Card -->
+      <div v-if="showInstallmentsCard" class="billing-card">
+        <div class="billing-card__header">
+          <CalendarClock :size="20" />
+          <h3>Upcoming Installments</h3>
+        </div>
+
+        <div v-if="installmentsLoading" class="billing-card__body">
+          <div class="billing-loading">
+            <Loader2 :size="24" class="billing-loading__spinner" />
+            <p>Loading installment schedule…</p>
+          </div>
+        </div>
+
+        <div v-else-if="installmentsError" class="billing-card__body">
+          <div class="billing-error">
+            <AlertCircle :size="20" />
+            <span>{{ installmentsError }}</span>
+            <button class="billing-btn billing-btn--secondary" @click="fetchInstallments">
+              <RefreshCw :size="16" />
+              Retry
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="billing-card__body">
+          <p class="billing-installments__hint">
+            Your plan bills automatically on each due date. Paying early is
+            optional — click any installment to open its Stripe invoice.
+          </p>
+
+          <div
+            v-for="inst in upcomingInstallments"
+            :key="inst.n"
+            class="billing-installment-row"
+            :class="{ 'billing-installment-row--overdue': inst.status === 'overdue' }"
+          >
+            <div class="billing-installment-row__info">
+              <span class="billing-installment-row__label">
+                Installment {{ inst.n }}
+                <span
+                  v-if="inst.status === 'overdue'"
+                  class="billing-badge billing-badge--past_due"
+                >
+                  <AlertCircle :size="12" /> Overdue
+                </span>
+              </span>
+              <span class="billing-installment-row__amount">
+                {{ formatCurrency(inst.amountCents, inst.currency) }}
+              </span>
+              <span class="billing-installment-row__date">
+                Due {{ formatIsoDate(inst.dueDate) }}
+              </span>
+            </div>
+            <button
+              class="billing-btn billing-btn--primary billing-btn--sm"
+              :disabled="payingInstallmentN !== null"
+              @click="payInstallmentEarly(inst.n)"
+            >
+              <Loader2 v-if="payingInstallmentN === inst.n" :size="14" class="billing-loading__spinner" />
+              <Zap v-else :size="14" />
+              Pay Early
+            </button>
+          </div>
         </div>
       </div>
 
@@ -358,6 +588,66 @@ onMounted(fetchBillingSummary);
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 1.25rem;
+}
+
+/* Installments card — sits between Subscription and Pending Charges,
+   uses the same billing-card shell + row treatment as the invoice
+   lists so the visual language stays consistent. */
+.billing-installments__hint {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary, var(--color-text));
+  margin: 0 0 0.75rem;
+  line-height: 1.5;
+}
+
+.billing-installment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  background-color: var(--color-bg);
+  margin-bottom: 0.5rem;
+}
+
+.billing-installment-row:last-child {
+  margin-bottom: 0;
+}
+
+.billing-installment-row--overdue {
+  /* Same soft-amber pattern as the Overview warning banner so overdue
+     reads consistently across the app. */
+  background-color: color-mix(in srgb, #d97706 8%, transparent);
+  border-color: color-mix(in srgb, #d97706 35%, transparent);
+}
+
+.billing-installment-row__info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.billing-installment-row__label {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.billing-installment-row__amount {
+  font-size: 0.875rem;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-installment-row__date {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, var(--color-text));
 }
 
 .billing-support-link {
