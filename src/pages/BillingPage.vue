@@ -909,6 +909,9 @@ const intervalLabel = computed(
   cursor: pointer;
   transition: opacity 0.15s ease;
   text-decoration: none;
+  /* Keep label + icon on one line — otherwise "Pay Now" and "Pay Early"
+     wrap in the narrow right-column of invoice rows. */
+  white-space: nowrap;
 }
 
 .billing-btn:hover {
