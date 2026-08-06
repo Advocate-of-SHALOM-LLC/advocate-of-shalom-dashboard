@@ -69,6 +69,16 @@ interface Installment {
   stripeInvoiceId?: string | null;
 }
 
+// Maintenance schedule shape. Stripe encodes quarterly plans as
+// interval='month' + interval_count=3, so we can't use subscription.interval
+// alone for the price suffix — need the upstream's cycleShortLabel.
+interface MaintenanceSchedule {
+  cycleLabel?: string;
+  cycleShortLabel?: string;
+  amountCents?: number;
+  nextChargeDate?: string;
+}
+
 const subscription = ref<Subscription | null>(null);
 const pendingCharges = ref<Invoice[]>([]);
 const recentPayments = ref<Invoice[]>([]);
@@ -81,6 +91,8 @@ const installmentsError = ref<string | null>(null);
 // Track which installment is mid-issue so we can disable + spinner just
 // that row instead of the whole card.
 const payingInstallmentN = ref<number | null>(null);
+
+const maintenanceSchedule = ref<MaintenanceSchedule | null>(null);
 
 function formatCurrency(amount: number, currency = 'usd') {
   return new Intl.NumberFormat('en-US', {
@@ -217,6 +229,32 @@ async function fetchInstallments() {
   }
 }
 
+// Best-effort fetch — a failure here shouldn't cause page-level noise
+// since we fall back to subscription.interval for the price suffix
+// (the "$850/month" bug we're fixing is cosmetic, not blocking).
+async function fetchMaintenanceSchedule() {
+  if (!billing?.stripeCustomerId) return;
+
+  try {
+    const token = await getAccessTokenSilently();
+    const res = await fetch(
+      `/.netlify/functions/get-maintenance-schedule?stripeCustomerId=${billing.stripeCustomerId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (!res.ok) return;
+    const text = await res.text();
+    if (text.trim().startsWith('<')) return;
+
+    const data = safeParseJson(text);
+    if (data?.success && data.cycleShortLabel) {
+      maintenanceSchedule.value = data;
+    }
+  } catch {
+    // Silent — cosmetic fallback covers it.
+  }
+}
+
 async function payInstallmentEarly(n: number) {
   if (!billing?.stripeCustomerId || payingInstallmentN.value !== null) return;
 
@@ -302,7 +340,15 @@ const showInstallmentsCard = computed(
 onMounted(() => {
   fetchBillingSummary();
   fetchInstallments();
+  fetchMaintenanceSchedule();
 });
+
+// Prefer the upstream's display-ready cycle label ("quarter") when we have
+// one. Stripe's raw interval is always "month" for our quarterly plans,
+// which prints wrong; the maintenance endpoint fixes this at the source.
+const intervalLabel = computed(
+  () => maintenanceSchedule.value?.cycleShortLabel || subscription.value?.interval || ''
+);
 </script>
 
 <template>
@@ -356,7 +402,7 @@ onMounted(() => {
           <div class="billing-detail">
             <span class="billing-detail__label">Amount</span>
             <span class="billing-detail__value">
-              {{ formatCurrency(subscription.amount, subscription.currency) }}/{{ subscription.interval }}
+              {{ formatCurrency(subscription.amount, subscription.currency) }}/{{ intervalLabel }}
             </span>
           </div>
           <div v-if="subscription.nextBillingDate" class="billing-detail">
