@@ -122,6 +122,18 @@ function safeParseJson(text: string): any {
   }
 }
 
+// Client-facing error copy. Real diagnostic detail is logged to the
+// console for the developer; the user only sees something they can
+// actually act on (retry / contact support).
+const FRIENDLY_LOAD_ERROR =
+  'We couldn\'t load your billing details. Please try again — or contact support if the problem continues.';
+const FRIENDLY_SCHEDULE_ERROR =
+  'We couldn\'t load your installment schedule. Please try again — or contact support if the problem continues.';
+const FRIENDLY_INVOICE_ERROR =
+  'We couldn\'t open that invoice. Please try again in a moment.';
+const FRIENDLY_PORTAL_ERROR =
+  'We couldn\'t open the billing portal. Please try again in a moment.';
+
 function formatIsoDate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
@@ -155,26 +167,36 @@ async function fetchBillingSummary() {
     const looksLikeHtml = text.trim().startsWith('<');
 
     if (looksLikeHtml) {
-      throw new Error(
-        `Stripe billing endpoint returned HTML (status ${res.status}). Netlify dev may not have loaded stripe-get-billing-summary — restart it.`
-      );
+      // Dev-only case: netlify dev didn't register the function so the SPA
+      // fallback served index.html. Log the diagnostic, show the user
+      // something they can act on.
+      console.error(`stripe-get-billing-summary returned HTML (status ${res.status}). Function may not be loaded.`);
+      throw new Error(FRIENDLY_LOAD_ERROR);
     }
 
     if (!res.ok) {
       const errData = safeParseJson(text);
-      throw new Error(errData?.error || `Failed to load billing data (${res.status})`);
+      console.error('stripe-get-billing-summary error:', res.status, errData);
+      throw new Error(FRIENDLY_LOAD_ERROR);
     }
 
     const data = safeParseJson(text);
-    if (!data) throw new Error('Stripe billing endpoint returned unparseable JSON.');
-    if (!data.success) throw new Error(data.error || 'Unknown error');
+    if (!data) {
+      console.error('stripe-get-billing-summary returned unparseable JSON');
+      throw new Error(FRIENDLY_LOAD_ERROR);
+    }
+    if (!data.success) {
+      console.error('stripe-get-billing-summary success=false:', data.error);
+      throw new Error(FRIENDLY_LOAD_ERROR);
+    }
 
     subscription.value = data.subscription;
     pendingCharges.value = data.pendingCharges || [];
     recentPayments.value = data.recentPayments || [];
     paymentMethod.value = data.paymentMethod;
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load billing data';
+    console.error('fetchBillingSummary caught:', err);
+    error.value = FRIENDLY_LOAD_ERROR;
   } finally {
     loading.value = false;
   }
@@ -203,27 +225,24 @@ async function fetchInstallments() {
     const text = await res.text();
     const looksLikeHtml = text.trim().startsWith('<');
 
-    if (!res.ok) {
-      if (looksLikeHtml) {
-        throw new Error(
-          `Installment schedule endpoint returned HTML (status ${res.status}). Netlify dev may not have loaded the function — restart it and try again.`
-        );
-      }
-      const data = safeParseJson(text);
-      throw new Error(data?.error || `Failed to load schedule (${res.status})`);
-    }
-
-    if (looksLikeHtml) {
-      throw new Error(
-        'Installment schedule endpoint returned HTML instead of JSON. The /.netlify/functions/get-installment-schedule route isn\'t registered — restart netlify dev.'
+    if (!res.ok || looksLikeHtml) {
+      const data = looksLikeHtml ? null : safeParseJson(text);
+      console.error(
+        `get-installment-schedule ${looksLikeHtml ? 'returned HTML' : `error ${res.status}`}:`,
+        data
       );
+      throw new Error(FRIENDLY_SCHEDULE_ERROR);
     }
 
     const data = safeParseJson(text);
-    if (!data) throw new Error('Installment schedule endpoint returned unparseable JSON.');
+    if (!data) {
+      console.error('get-installment-schedule returned unparseable JSON');
+      throw new Error(FRIENDLY_SCHEDULE_ERROR);
+    }
     installments.value = data.installments || [];
   } catch (err) {
-    installmentsError.value = err instanceof Error ? err.message : 'Failed to load installments';
+    console.error('fetchInstallments caught:', err);
+    installmentsError.value = FRIENDLY_SCHEDULE_ERROR;
   } finally {
     installmentsLoading.value = false;
   }
@@ -287,7 +306,8 @@ async function payInstallmentEarly(n: number) {
     // the right state on return, and any newly-paid one flips to paid.
     setTimeout(() => { fetchInstallments(); }, 2000);
   } catch (err) {
-    installmentsError.value = err instanceof Error ? err.message : 'Failed to open invoice';
+    console.error('payInstallmentEarly caught:', err);
+    installmentsError.value = FRIENDLY_INVOICE_ERROR;
   } finally {
     payingInstallmentN.value = null;
   }
@@ -318,7 +338,8 @@ async function openPortal() {
       throw new Error(data.error || 'Could not create portal session');
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to open billing portal';
+    console.error('openPortal caught:', err);
+    error.value = FRIENDLY_PORTAL_ERROR;
   } finally {
     portalLoading.value = false;
   }
@@ -361,17 +382,17 @@ const intervalLabel = computed(
     </div>
 
     <!-- Loading -->
-    <div v-else-if="loading" class="billing-loading">
-      <Loader2 :size="32" class="billing-loading__spinner" />
+    <div v-else-if="loading" class="billing-loading" role="status" aria-live="polite">
+      <Loader2 :size="32" class="billing-loading__spinner" aria-hidden="true" />
       <p>Loading billing information...</p>
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="billing-error">
-      <AlertCircle :size="20" />
+    <div v-else-if="error" class="billing-error" role="alert">
+      <AlertCircle :size="20" aria-hidden="true" />
       <span>{{ error }}</span>
       <button class="billing-btn billing-btn--secondary" @click="fetchBillingSummary">
-        <RefreshCw :size="16" />
+        <RefreshCw :size="16" aria-hidden="true" />
         Retry
       </button>
     </div>
@@ -433,18 +454,18 @@ const intervalLabel = computed(
         </div>
 
         <div v-if="installmentsLoading" class="billing-card__body">
-          <div class="billing-loading">
-            <Loader2 :size="24" class="billing-loading__spinner" />
+          <div class="billing-loading" role="status" aria-live="polite">
+            <Loader2 :size="24" class="billing-loading__spinner" aria-hidden="true" />
             <p>Loading installment schedule…</p>
           </div>
         </div>
 
         <div v-else-if="installmentsError" class="billing-card__body">
-          <div class="billing-error">
-            <AlertCircle :size="20" />
+          <div class="billing-error" role="alert">
+            <AlertCircle :size="20" aria-hidden="true" />
             <span>{{ installmentsError }}</span>
             <button class="billing-btn billing-btn--secondary" @click="fetchInstallments">
-              <RefreshCw :size="16" />
+              <RefreshCw :size="16" aria-hidden="true" />
               Retry
             </button>
           </div>
