@@ -20,6 +20,19 @@ interface BillingSummary {
     created: number;
     dueDate: number | null;
     hostedInvoiceUrl: string | null;
+    /**
+     * Set when the Pipeline Dashboard issued this invoice as one of several
+     * alternatives for the same charges (metadata.pair_id). Invoices sharing
+     * a pairId are options, not separate bills — paying one voids the ones
+     * it makes redundant.
+     */
+    pairId: string | null;
+    /** What the invoice covers, so the UI can show more than a number. */
+    lineItems: Array<{ description: string | null; amount: number }>;
+    /** Installments this invoice bills (line/invoice metadata.installmentNumber). */
+    installmentNumbers: number[];
+    /** Subscription that generated the invoice, if any. */
+    subscriptionId: string | null;
   }>;
   recentPayments: Array<{
     id: string;
@@ -98,7 +111,13 @@ export async function handler(event: { queryStringParameters: Record<string, str
         amount: item?.price?.unit_amount || 0,
         currency: item?.price?.currency || 'usd',
         interval: item?.price?.recurring?.interval || 'month',
-        nextBillingDate: (sub as any).current_period_end ?? null,
+        // current_period_end moved from the subscription to its items in
+        // newer Stripe API versions — read both. A cancelled subscription
+        // keeps its old period end but will never bill again.
+        nextBillingDate:
+          sub.status === 'canceled'
+            ? null
+            : (item as any)?.current_period_end ?? (sub as any).current_period_end ?? null,
         cancelAtPeriodEnd: sub.cancel_at_period_end,
       };
     }
@@ -110,16 +129,35 @@ export async function handler(event: { queryStringParameters: Record<string, str
       limit: 10,
     });
 
-    const pendingCharges: BillingSummary['pendingCharges'] = openInvoices.data.map((inv) => ({
-      id: inv.id,
-      number: inv.number,
-      amount: inv.amount_due,
-      currency: inv.currency,
-      description: inv.description,
-      created: inv.created,
-      dueDate: inv.due_date,
-      hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
-    }));
+    const pendingCharges: BillingSummary['pendingCharges'] = openInvoices.data.map((inv) => {
+      const lines = inv.lines?.data ?? [];
+
+      // installmentNumber lives on the line for combined invoices and on the
+      // invoice itself for pay-early one-offs — collect from both.
+      const installmentNumbers = [inv.metadata?.installmentNumber, ...lines.map((l) => l.metadata?.installmentNumber)]
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n > 0);
+
+      // The subscription reference moved under `parent` in newer Stripe API
+      // versions; read both so this survives an account-level version bump.
+      const subRef =
+        (inv as any).parent?.subscription_details?.subscription ?? (inv as any).subscription ?? null;
+
+      return {
+        id: inv.id,
+        number: inv.number,
+        amount: inv.amount_due,
+        currency: inv.currency,
+        description: inv.description,
+        created: inv.created,
+        dueDate: inv.due_date,
+        hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+        pairId: inv.metadata?.pair_id || null,
+        lineItems: lines.map((l) => ({ description: l.description, amount: l.amount })),
+        installmentNumbers: [...new Set(installmentNumbers)],
+        subscriptionId: typeof subRef === 'string' ? subRef : subRef?.id ?? null,
+      };
+    });
 
     // Fetch recent paid invoices
     const paidInvoices = await stripe.invoices.list({

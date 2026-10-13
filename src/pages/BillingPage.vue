@@ -47,6 +47,13 @@ interface Invoice {
   paidAt?: number | null;
   hostedInvoiceUrl: string | null;
   invoicePdf?: string | null;
+  // Pending charges only. Invoices sharing a pairId are alternative ways to
+  // pay the same charges (issued that way by the Pipeline Dashboard), not
+  // separate bills.
+  pairId?: string | null;
+  lineItems?: Array<{ description: string | null; amount: number }>;
+  installmentNumbers?: number[];
+  subscriptionId?: string | null;
 }
 
 interface PaymentMethod {
@@ -88,6 +95,9 @@ const portalLoading = ref(false);
 const installments = ref<Installment[]>([]);
 const installmentsLoading = ref(true);
 const installmentsError = ref<string | null>(null);
+// The Stripe subscription behind the installment plan — lets us recognise
+// its auto-generated invoice in Pending Charges.
+const installmentSubscriptionId = ref<string | null>(null);
 // Track which installment is mid-issue so we can disable + spinner just
 // that row instead of the whole card.
 const payingInstallmentN = ref<number | null>(null);
@@ -240,6 +250,7 @@ async function fetchInstallments() {
       throw new Error(FRIENDLY_SCHEDULE_ERROR);
     }
     installments.value = data.installments || [];
+    installmentSubscriptionId.value = data.stripeSubscriptionId || null;
   } catch (err) {
     console.error('fetchInstallments caught:', err);
     installmentsError.value = FRIENDLY_SCHEDULE_ERROR;
@@ -345,11 +356,67 @@ async function openPortal() {
   }
 }
 
-// Computed: upcoming or overdue rows only. Paid installments already live
-// in the Recent Payments card, so no need to duplicate them here.
-const upcomingInstallments = computed(() =>
+// Installments not yet paid, in schedule order.
+const unpaidInstallments = computed(() =>
   installments.value.filter((i) => i.status !== 'paid')
 );
+
+// An installment that already sits on an open invoice is shown (and paid)
+// in Pending Charges — listing it here too makes it look like a second
+// amount owed, and Pay Early would issue a duplicate invoice. Covered when
+// an open invoice names the installment number, or (for the next one due)
+// when the installment subscription's own invoice is open.
+function isInstallmentInvoiced(n: number) {
+  const nextDue = unpaidInstallments.value[0]?.n;
+  return pendingCharges.value.some(
+    (c) =>
+      c.installmentNumbers?.includes(n) ||
+      (n === nextDue &&
+        !!installmentSubscriptionId.value &&
+        c.subscriptionId === installmentSubscriptionId.value)
+  );
+}
+
+// Computed: upcoming or overdue rows that aren't already invoiced. Paid
+// installments live in the Recent Payments card, so no need to repeat them.
+const upcomingInstallments = computed(() =>
+  unpaidInstallments.value.filter((i) => !isInstallmentInvoiced(i.n))
+);
+
+// Pending charges grouped for display. Invoices that share a pairId are
+// alternative ways to pay the same charges, so they render as ONE amount
+// due: the invoice covering everything is the primary action, the partial
+// ones are quiet "pay separately" links underneath. A pair with a single
+// open invoice left is just a normal charge.
+interface ChargeGroup {
+  key: string;
+  primary: Invoice;
+  alternatives: Invoice[];
+}
+
+const pendingChargeGroups = computed(() => {
+  const members = new Map<string, Invoice[]>();
+  for (const charge of pendingCharges.value) {
+    const key = charge.pairId || charge.id;
+    const list = members.get(key);
+    if (list) list.push(charge);
+    else members.set(key, [charge]);
+  }
+
+  const groups: ChargeGroup[] = [];
+  for (const [key, charges] of members) {
+    // The combined invoice is the one for the largest amount.
+    const [primary, ...alternatives] = [...charges].sort((a, b) => b.amount - a.amount);
+    if (primary) groups.push({ key, primary, alternatives });
+  }
+  return groups;
+});
+
+// What an invoice is for, in words. Stripe's invoice-level description is
+// usually empty for Pipeline-issued invoices, so fall back to its line item.
+function chargeLabel(charge: Invoice) {
+  return charge.description || charge.lineItems?.[0]?.description || charge.number || 'Invoice';
+}
 
 // Card is silent when the customer isn't on installments (empty list) —
 // keeps the page clean for non-installment clients. Loading and error
@@ -521,24 +588,58 @@ const intervalLabel = computed(
         </div>
 
         <div v-if="pendingCharges.length > 0" class="billing-card__body">
-          <div v-for="charge in pendingCharges" :key="charge.id" class="billing-invoice-row">
-            <div class="billing-invoice-row__info">
-              <span class="billing-invoice-row__amount">{{ formatCurrency(charge.amount, charge.currency) }}</span>
-              <span class="billing-invoice-row__desc">{{ charge.description || charge.number || 'Invoice' }}</span>
-              <span class="billing-invoice-row__date">
-                {{ charge.dueDate ? `Due ${formatDate(charge.dueDate)}` : formatDate(charge.created) }}
+          <div v-for="group in pendingChargeGroups" :key="group.key" class="billing-due">
+            <div class="billing-due__total">
+              <span class="billing-due__label">
+                {{ (group.primary.lineItems?.length ?? 0) > 1 ? 'Total due' : chargeLabel(group.primary) }}
+              </span>
+              <span class="billing-due__amount">
+                {{ formatCurrency(group.primary.amount, group.primary.currency) }}
               </span>
             </div>
+
+            <!-- Breakdown only when the invoice covers more than one thing -->
+            <ul v-if="(group.primary.lineItems?.length ?? 0) > 1" class="billing-due__lines">
+              <li v-for="(line, i) in group.primary.lineItems" :key="i">
+                <span>{{ line.description || 'Item' }}</span>
+                <span>{{ formatCurrency(line.amount, group.primary.currency) }}</span>
+              </li>
+            </ul>
+
+            <span class="billing-invoice-row__date">
+              {{ group.primary.dueDate ? `Due ${formatDate(group.primary.dueDate)}` : formatDate(group.primary.created) }}
+            </span>
+
             <a
-              v-if="charge.hostedInvoiceUrl"
-              :href="charge.hostedInvoiceUrl"
+              v-if="group.primary.hostedInvoiceUrl"
+              :href="group.primary.hostedInvoiceUrl"
               target="_blank"
               rel="noopener"
-              class="billing-btn billing-btn--primary billing-btn--sm"
+              class="billing-btn billing-btn--primary billing-btn--full"
             >
-              Pay Now
+              Pay {{ formatCurrency(group.primary.amount, group.primary.currency) }}
               <ExternalLink :size="14" />
             </a>
+
+            <!-- Paired invoices: the same charges, payable one item at a time -->
+            <div v-if="group.alternatives.length > 0" class="billing-due__alt">
+              <p>
+                Prefer to pay one item at a time? Use a link below instead —
+                you'll only be billed for what's left.
+              </p>
+              <template v-for="alt in group.alternatives" :key="alt.id">
+                <a
+                  v-if="alt.hostedInvoiceUrl"
+                  :href="alt.hostedInvoiceUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="billing-due__alt-link"
+                >
+                  Pay only {{ chargeLabel(alt) }} — {{ formatCurrency(alt.amount, alt.currency) }}
+                  <ExternalLink :size="12" />
+                </a>
+              </template>
+            </div>
           </div>
         </div>
 
@@ -715,6 +816,90 @@ const intervalLabel = computed(
 .billing-installment-row__date {
   font-size: 0.75rem;
   color: var(--color-text-secondary, var(--color-text));
+}
+
+/* Pending charges — each block is one amount due. Paired invoices
+   (alternative ways to pay the same charges) collapse into a single
+   block: one total, one primary button, and quiet "pay separately"
+   links, so the card never reads as a stack of separate bills. */
+.billing-due {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--border-radius);
+  background-color: var(--color-bg);
+}
+
+.billing-due__total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.billing-due__label {
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.billing-due__amount {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.billing-due__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.billing-due__lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-due__lines li span:last-child {
+  white-space: nowrap;
+}
+
+.billing-due__alt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.billing-due__alt p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.billing-due__alt-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-primary);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.billing-due__alt-link:hover {
+  text-decoration: underline;
 }
 
 .billing-support-link {
