@@ -70,7 +70,7 @@ interface Installment {
   n: number;
   amountCents: number;
   currency: string;
-  dueDate: string;
+  dueDate: string | null;
   status: 'paid' | 'upcoming' | 'overdue';
   paidOn?: string | null;
   stripeInvoiceId?: string | null;
@@ -144,7 +144,10 @@ const FRIENDLY_INVOICE_ERROR =
 const FRIENDLY_PORTAL_ERROR =
   'We couldn\'t open the billing portal. Please try again in a moment.';
 
-function formatIsoDate(iso: string) {
+// The schedule returns no dueDate once the installment subscription has
+// ended, so tolerate a missing value rather than throwing mid-render.
+function formatIsoDate(iso: string | null | undefined) {
+  if (!iso) return '';
   const [y, m, d] = iso.split('-').map(Number);
   if (!y || !m || !d) return iso;
   return new Date(y, m - 1, d).toLocaleDateString('en-US', {
@@ -630,7 +633,7 @@ const intervalLabel = computed(
               <span class="billing-installment-row__amount">
                 {{ formatCurrency(inst.amountCents, inst.currency) }}
               </span>
-              <span class="billing-installment-row__date">
+              <span v-if="inst.dueDate" class="billing-installment-row__date">
                 Due {{ formatIsoDate(inst.dueDate) }}
               </span>
             </div>
