@@ -28,7 +28,7 @@ interface BillingSummary {
      */
     pairId: string | null;
     /** What the invoice covers, so the UI can show more than a number. */
-    lineItems: Array<{ description: string | null; amount: number }>;
+    lineItems: Array<{ description: string | null; amount: number; installmentNumber: number | null }>;
     /** Installments this invoice bills (line/invoice metadata.installmentNumber). */
     installmentNumbers: number[];
     /** Subscription that generated the invoice, if any. */
@@ -153,7 +153,11 @@ export async function handler(event: { queryStringParameters: Record<string, str
         dueDate: inv.due_date,
         hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
         pairId: inv.metadata?.pair_id || null,
-        lineItems: lines.map((l) => ({ description: l.description, amount: l.amount })),
+        lineItems: lines.map((l) => ({
+          description: l.description,
+          amount: l.amount,
+          installmentNumber: Number(l.metadata?.installmentNumber) || null,
+        })),
         installmentNumbers: [...new Set(installmentNumbers)],
         subscriptionId: typeof subRef === 'string' ? subRef : subRef?.id ?? null,
       };
