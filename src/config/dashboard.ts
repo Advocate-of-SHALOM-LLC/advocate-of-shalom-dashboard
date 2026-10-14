@@ -14,7 +14,8 @@ const config: DashboardConfig = {
   },
   "enabledWidgets": [
     "links",
-    "siteAnalytics"
+    "siteAnalytics",
+    "siteHealth"
   ],
   "tutorialVideos": [],
   "links": [

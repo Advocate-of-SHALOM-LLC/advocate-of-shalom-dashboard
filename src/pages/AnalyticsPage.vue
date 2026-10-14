@@ -24,49 +24,79 @@ interface AnalyticsData {
   seconds_on_page: number;
   pages: { value: string; pageviews: number; visitors: number }[];
   referrers: { value: string; pageviews: number; visitors: number }[];
+  /** Real visitor counts per day or month (YYYY-MM-DD bucket start). */
+  histogram?: { date: string; pageviews: number; visitors: number }[];
 }
+
+type Period = 'today' | '7d' | '30d' | '12m' | 'all';
 
 const current = ref<AnalyticsData | null>(null);
 const previous = ref<AnalyticsData | null>(null);
-const period = ref<'today' | '7d' | '30d'>('30d');
+const period = ref<Period>('30d');
 const showInternal = ref(false);
 const chartCanvas = ref<HTMLCanvasElement | null>(null);
 let chartInstance: Chart | null = null;
 
-const PERIOD_LABELS: Record<string, string> = {
+const PERIOD_LABELS: Record<Period, string> = {
   today: 'Today',
   '7d': 'Last 7 days',
   '30d': 'Last 30 days',
+  '12m': 'Last 12 months',
+  all: 'Since tracking began',
 };
 
-const PERIOD_WORDS: Record<string, string> = {
+const PERIOD_WORDS: Record<Period, string> = {
   today: 'today',
   '7d': 'this week',
   '30d': 'this month',
+  '12m': 'in the last 12 months',
+  all: 'since tracking began',
 };
 
-const PREV_PERIOD_WORDS: Record<string, string> = {
+const PREV_PERIOD_WORDS: Record<Period, string> = {
   today: 'yesterday',
   '7d': 'last week',
   '30d': 'last month',
+  '12m': 'the 12 months before',
+  all: '',
 };
+
+// Chart buckets: days for short ranges, months for the long-term views.
+const PERIOD_INTERVAL: Record<Period, 'day' | 'month'> = {
+  today: 'day',
+  '7d': 'day',
+  '30d': 'day',
+  '12m': 'month',
+  all: 'month',
+};
+
+// Far enough back to include any site's first tracked visit; the chart
+// trims the empty months before tracking actually began.
+const ALL_TIME_START = '2019-01-01';
 
 // ─── Date helpers ───────────────────────────────────────────────────────────
 
-function getDateRange(p: string) {
+function getDateRange(p: Period) {
   const now = new Date();
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
   if (p === 'today') {
     const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-    const twoDaysAgo = new Date(now); twoDaysAgo.setDate(now.getDate() - 2);
     return { start: fmt(now), end: fmt(now), prevStart: fmt(yesterday), prevEnd: fmt(yesterday) };
   }
 
-  const days = p === '7d' ? 7 : 30;
-  const start = new Date(now); start.setDate(now.getDate() - days);
-  const prevStart = new Date(start); prevStart.setDate(start.getDate() - days);
+  if (p === 'all') {
+    return { start: ALL_TIME_START, end: fmt(now), prevStart: null, prevEnd: null };
+  }
+
+  const start = new Date(now);
+  if (p === '12m') start.setFullYear(now.getFullYear() - 1);
+  else start.setDate(now.getDate() - (p === '7d' ? 7 : 30));
+
   const prevEnd = new Date(start); prevEnd.setDate(start.getDate() - 1);
+  const prevStart = new Date(start);
+  if (p === '12m') prevStart.setFullYear(start.getFullYear() - 1);
+  else prevStart.setDate(start.getDate() - (p === '7d' ? 7 : 30));
 
   return { start: fmt(start), end: fmt(now), prevStart: fmt(prevStart), prevEnd: fmt(prevEnd) };
 }
@@ -80,18 +110,19 @@ async function fetchAnalytics() {
   try {
     const hostname = analytics?.simpleAnalyticsId || config.clientDomain;
     const { start, end, prevStart, prevEnd } = getDateRange(period.value);
+    const interval = PERIOD_INTERVAL[period.value];
 
     const [currentRes, previousRes] = await Promise.all([
-      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${start}&end=${end}`),
-      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${prevStart}&end=${prevEnd}`),
+      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${start}&end=${end}&interval=${interval}`),
+      prevStart && prevEnd
+        ? fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${prevStart}&end=${prevEnd}`)
+        : Promise.resolve(null),
     ]);
 
     if (!currentRes.ok) throw new Error(`Analytics request failed: ${currentRes.status}`);
 
     current.value = await currentRes.json();
-    if (previousRes.ok) {
-      previous.value = await previousRes.json();
-    }
+    previous.value = previousRes?.ok ? await previousRes.json() : null;
 
     await nextTick();
     renderChart();
@@ -102,7 +133,7 @@ async function fetchAnalytics() {
   }
 }
 
-function changePeriod(p: 'today' | '7d' | '30d') {
+function changePeriod(p: Period) {
   period.value = p;
   fetchAnalytics();
 }
@@ -133,9 +164,38 @@ function trendLabel(dir: 'up' | 'down' | 'flat'): string {
   return 'About the same';
 }
 
+// A comparison needs an earlier period that actually has data. "Since
+// tracking began" has none, and a 12-month view on a young site would
+// otherwise compare against months before the site existed.
+const hasComparison = computed(() => {
+  const p = previous.value;
+  if (!p || period.value === 'all') return false;
+  if (period.value === '12m' && !p.visitors && !p.pageviews) return false;
+  return true;
+});
+
 const visitorChange = computed(() => {
-  if (!current.value || !previous.value) return 0;
+  if (!current.value || !previous.value || !hasComparison.value) return 0;
   return pctChange(current.value.visitors, previous.value.visitors);
+});
+
+// Histogram buckets to chart. For "since tracking began", drop the empty
+// months before the first recorded visit.
+const chartBuckets = computed(() => {
+  const buckets = current.value?.histogram ?? [];
+  if (period.value !== 'all') return buckets;
+  const first = buckets.findIndex((b) => b.pageviews > 0 || b.visitors > 0);
+  return first === -1 ? [] : buckets.slice(first);
+});
+
+function bucketDate(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+  return new Date(y ?? 1970, (m ?? 1) - 1, d ?? 1);
+}
+
+const trackingSinceLabel = computed(() => {
+  const first = chartBuckets.value[0];
+  return first ? bucketDate(first.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : '';
 });
 
 // ─── Story headline ─────────────────────────────────────────────────────────
@@ -143,7 +203,16 @@ const visitorChange = computed(() => {
 const storyHeadline = computed(() => {
   if (!current.value) return '';
   const v = current.value.visitors;
-  const periodWord = PERIOD_WORDS[period.value];
+  const periodWord =
+    period.value === 'all' && trackingSinceLabel.value
+      ? `since tracking began in ${trackingSinceLabel.value}`
+      : PERIOD_WORDS[period.value];
+
+  if (v === 0) return `No one visited your site ${periodWord}.`;
+
+  const visited = `${v.toLocaleString()} ${v === 1 ? 'person' : 'people'} visited your site ${periodWord}`;
+  if (!hasComparison.value) return `${visited}.`;
+
   const prevWord = PREV_PERIOD_WORDS[period.value];
   const change = visitorChange.value;
 
@@ -153,11 +222,14 @@ const storyHeadline = computed(() => {
   else if (change >= -10) trend = `about the same as ${prevWord}`;
   else trend = `down from ${prevWord}`;
 
-  return `${v.toLocaleString()} ${v === 1 ? 'person' : 'people'} visited your site ${periodWord} — ${trend}.`;
+  return `${visited} — ${trend}.`;
 });
 
 const storySubline = computed(() => {
   if (!current.value) return '';
+  if (current.value.visitors === 0) {
+    return 'Try a longer range above to see earlier visits.';
+  }
   const pages = current.value.pages || [];
   const homepageVisitors = pages.find(p => p.value === '/')?.visitors ?? current.value.visitors;
   const deepExplorers = Math.max(0, current.value.visitors - homepageVisitors);
@@ -170,11 +242,12 @@ const storySubline = computed(() => {
 const metricCards = computed(() => {
   if (!current.value) return [];
   const c = current.value;
-  const p = previous.value;
+  // null = nothing to compare against, so the card shows no trend at all
+  const p = hasComparison.value ? previous.value : null;
   return [
-    { label: 'Visitors', value: c.visitors.toLocaleString(), change: p ? pctChange(c.visitors, p.visitors) : 0, icon: Users },
-    { label: 'Page views', value: c.pageviews.toLocaleString(), change: p ? pctChange(c.pageviews, p.pageviews) : 0, icon: Eye },
-    { label: 'Avg. time on page', value: formatDuration(c.seconds_on_page || 0), change: p ? pctChange(c.seconds_on_page, p.seconds_on_page) : 0, icon: Clock },
+    { label: 'Visitors', value: c.visitors.toLocaleString(), change: p ? pctChange(c.visitors, p.visitors) : null, icon: Users },
+    { label: 'Page views', value: c.pageviews.toLocaleString(), change: p ? pctChange(c.pageviews, p.pageviews) : null, icon: Eye },
+    { label: 'Avg. time on page', value: formatDuration(c.seconds_on_page || 0), change: p ? pctChange(c.seconds_on_page, p.seconds_on_page) : null, icon: Clock },
   ];
 });
 
@@ -277,50 +350,15 @@ function renderChart() {
 
   const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0d9488';
 
-  // Build weekly buckets from the pages data — SA doesn't return daily breakdowns in our proxy,
-  // so we simulate weekly distribution. For a real implementation, add a daily visitors field to the proxy.
-  const days = period.value === 'today' ? 1 : period.value === '7d' ? 7 : 30;
-  const totalVisitors = current.value.visitors || 0;
-
-  let labels: string[];
-  let data: number[];
-
-  if (days <= 1) {
-    labels = ['Today'];
-    data = [totalVisitors];
-  } else if (days <= 7) {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const today = new Date().getDay();
-    labels = [];
-    data = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const dayIdx = (today - i + 7) % 7;
-      labels.push(weekdays[dayIdx === 0 ? 6 : dayIdx - 1] ?? 'Day');
-      // Distribute visitors with slight variation
-      const base = Math.floor(totalVisitors / days);
-      const variance = Math.floor(Math.random() * Math.max(1, base * 0.3));
-      data.push(base + (i % 2 === 0 ? variance : -variance));
-    }
-    // Adjust last bucket so total matches
-    const sum = data.reduce((a, b) => a + b, 0);
-    if (data.length > 0) data[data.length - 1]! += totalVisitors - sum;
-  } else {
-    // 4-week buckets
-    const weekCount = Math.ceil(days / 7);
-    labels = [];
-    data = [];
-    const basePerWeek = Math.floor(totalVisitors / weekCount);
-    for (let i = 0; i < weekCount; i++) {
-      labels.push(`Week ${i + 1}`);
-      const variance = Math.floor(Math.random() * Math.max(1, basePerWeek * 0.2));
-      data.push(basePerWeek + (i % 2 === 0 ? variance : -variance));
-    }
-    const sum = data.reduce((a, b) => a + b, 0);
-    if (data.length > 0) data[data.length - 1]! += totalVisitors - sum;
-  }
-
-  // Ensure no negative values
-  data = data.map(d => Math.max(0, d));
+  // Real per-day or per-month visitor counts from Simple Analytics.
+  const monthly = PERIOD_INTERVAL[period.value] === 'month';
+  const labels = chartBuckets.value.map((b) =>
+    bucketDate(b.date).toLocaleDateString(
+      'en-US',
+      monthly ? { month: 'short', year: 'numeric' } : { month: 'short', day: 'numeric' }
+    )
+  );
+  const data = chartBuckets.value.map((b) => b.visitors);
 
   chartInstance = new Chart(chartCanvas.value, {
     type: 'bar',
@@ -337,7 +375,7 @@ function renderChart() {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y} visitors` } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.parsed.y} ${ctx.parsed.y === 1 ? 'visitor' : 'visitors'}` } },
         legend: { display: false },
       },
       scales: {
@@ -387,7 +425,7 @@ onMounted(fetchAnalytics);
           :key="key"
           class="ana__period"
           :class="{ 'ana__period--active': period === key }"
-          @click="changePeriod(key as 'today' | '7d' | '30d')"
+          @click="changePeriod(key)"
         >
           {{ label }}
         </button>
@@ -420,9 +458,9 @@ onMounted(fetchAnalytics);
           <p class="ana__story-sub">{{ storySubline }}</p>
         </div>
 
-        <!-- Weekly trend chart -->
-        <div class="ana__chart-section">
-          <p class="ana__section-label">Weekly visitors</p>
+        <!-- Visitors over time (real daily or monthly counts) -->
+        <div v-if="period !== 'today' && chartBuckets.length > 0" class="ana__chart-section">
+          <p class="ana__section-label">{{ PERIOD_INTERVAL[period] === 'month' ? 'Visitors by month' : 'Visitors by day' }}</p>
           <div class="ana__chart-wrap">
             <canvas ref="chartCanvas"></canvas>
           </div>
@@ -437,6 +475,7 @@ onMounted(fetchAnalytics);
             </div>
             <p class="ana__metric-value">{{ card.value }}</p>
             <div
+              v-if="card.change !== null"
               class="ana__metric-trend"
               :class="{
                 'ana__metric-trend--up': trendDirection(card.change) === 'up',
@@ -452,7 +491,7 @@ onMounted(fetchAnalytics);
         </div>
 
         <!-- Visitor journey funnel -->
-        <div class="ana__funnel">
+        <div v-if="current.visitors > 0" class="ana__funnel">
           <p class="ana__section-label">Visitor journey</p>
           <div v-for="step in funnel" :key="step.label" class="ana__funnel-row">
             <span class="ana__funnel-label">{{ step.label }}</span>
@@ -530,7 +569,9 @@ onMounted(fetchAnalytics);
 .ana__periods {
   display: flex; gap: 0.25rem; background-color: var(--color-surface);
   border: 1px solid var(--color-border); border-radius: var(--border-radius);
-  padding: 0.25rem; width: fit-content; margin-bottom: 1.5rem;
+  padding: 0.25rem; width: fit-content; max-width: 100%; margin-bottom: 1.5rem;
+  /* Five ranges no longer fit one row on a phone */
+  flex-wrap: wrap;
 }
 .ana__period {
   padding: 0.375rem 0.75rem; font-size: 0.8125rem; font-weight: 500;

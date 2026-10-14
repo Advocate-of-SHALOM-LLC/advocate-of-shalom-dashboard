@@ -2,13 +2,16 @@
  * Analytics Proxy — fetches from Simple Analytics API on behalf of the dashboard.
  * Keeps the SA API key server-side so it's never exposed to the client.
  *
- * Query params: hostname, start, end
+ * Query params: hostname, start, end, interval (optional: day | week | month)
+ * When interval is set, the response also carries a real visitor histogram
+ * for that range, bucketed by the interval.
  * Env: SIMPLE_ANALYTICS_API_KEY
  */
 export async function handler(event: {
   queryStringParameters: Record<string, string> | null;
 }) {
-  const { hostname, start, end } = event.queryStringParameters || {};
+  const { hostname, start, end, interval } = event.queryStringParameters || {};
+  const histogramInterval = interval && ['day', 'week', 'month'].includes(interval) ? interval : null;
 
   if (!hostname || !start || !end) {
     return {
@@ -30,7 +33,9 @@ export async function handler(event: {
 
   try {
     const baseUrl = 'https://simpleanalytics.com';
-    const statsUrl = `${baseUrl}/${hostname}.json?version=5&start=${start}&end=${end}&info=false&fields=pageviews,visitors,seconds_on_page`;
+    const statsUrl = histogramInterval
+      ? `${baseUrl}/${hostname}.json?version=5&start=${start}&end=${end}&info=false&fields=pageviews,visitors,seconds_on_page,histogram&interval=${histogramInterval}`
+      : `${baseUrl}/${hostname}.json?version=5&start=${start}&end=${end}&info=false&fields=pageviews,visitors,seconds_on_page`;
     const pagesUrl = `${baseUrl}/${hostname}.json?version=5&start=${start}&end=${end}&info=false&fields=pages`;
     const referrersUrl = `${baseUrl}/${hostname}.json?version=5&start=${start}&end=${end}&info=false&fields=referrers`;
 
@@ -70,6 +75,11 @@ export async function handler(event: {
         seconds_on_page: stats.seconds_on_page ?? 0,
         pages: (pages.pages ?? []).slice(0, 20),
         referrers: (referrers.referrers ?? []).slice(0, 20),
+        histogram: (stats.histogram ?? []).map((h: { date: string; pageviews?: number; visitors?: number }) => ({
+          date: h.date,
+          pageviews: h.pageviews ?? 0,
+          visitors: h.visitors ?? 0,
+        })),
       }),
     };
   } catch (err) {

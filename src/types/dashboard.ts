@@ -2,7 +2,8 @@ export type WidgetType =
   | 'siteAnalytics'
   | 'tutorials'
   | 'links'
-  | 'contentEditors';
+  | 'contentEditors'
+  | 'siteHealth';
 
 export interface TutorialVideo {
   title: string;

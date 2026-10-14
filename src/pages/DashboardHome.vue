@@ -8,6 +8,7 @@ import AnalyticsWidget from '@/components/widgets/AnalyticsWidget.vue';
 import TutorialsWidget from '@/components/widgets/TutorialsWidget.vue';
 import LinksWidget from '@/components/widgets/LinksWidget.vue';
 import ContentEditorWidget from '@/components/widgets/ContentEditorWidget.vue';
+import SiteHealthWidget from '@/components/widgets/SiteHealthWidget.vue';
 import config from '@/config/dashboard';
 
 const { user } = useAuth0();
@@ -17,6 +18,7 @@ const widgetMap: Record<string, unknown> = {
   tutorials: TutorialsWidget,
   links: LinksWidget,
   contentEditors: ContentEditorWidget,
+  siteHealth: SiteHealthWidget,
 };
 
 const activeWidgets = computed(() =>
