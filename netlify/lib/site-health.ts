@@ -1,24 +1,31 @@
 /**
- * Site health check — on-demand checks of the client's live website.
+ * Site health checks shared by the monthly snapshot job.
  *
- * Runs the fast server-side checks (is the site up, certificate, security
- * headers, search-engine files). The Google PageSpeed scores take 10–20
- * seconds, longer than a Netlify function may run, so the dashboard
- * requests those from the browser instead.
- *
- * Always checks the domain in the dashboard config — never a URL from the
- * request — so this can't be used to probe other sites.
+ * Fast checks (online, certificate, security headers, search files) take
+ * well under a second. Google PageSpeed takes 10–20 seconds and sometimes
+ * fails on Google's side, so it is run and stored separately.
  */
 import tls from 'node:tls';
-import config from '../../src/config/dashboard';
 
-type Status = 'good' | 'warn' | 'bad';
+export type Status = 'good' | 'warn' | 'bad' | 'info';
 
-interface Check {
+export interface Check {
   id: string;
   label: string;
   status: Status;
   summary: string;
+  /** 0–100 for Google PageSpeed categories, so months can be compared. */
+  score?: number;
+}
+
+export interface HealthSnapshot {
+  /** Calendar month the snapshot stands for, YYYY-MM (UTC). */
+  month: string;
+  url: string;
+  checkedAt: string;
+  checks: Check[];
+  /** False until Google's speed test has succeeded for this month. */
+  speedMeasured: boolean;
 }
 
 const TIMEOUT_MS = 6000;
@@ -152,39 +159,55 @@ async function checkSearchFiles(siteUrl: string): Promise<Check> {
   return { id: 'search', label, status: 'warn', summary: `Missing ${missing}, which help Google list every page.` };
 }
 
-export async function handler(event: { httpMethod: string; headers: Record<string, string> }) {
-  if (event.httpMethod !== 'GET') {
-    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
-  }
-
-  // Presence-only Auth0 gate — same pattern as the billing functions.
-  const authHeader = event.headers['authorization'] || event.headers['Authorization'];
-  if (!authHeader) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
-
-  const host = config.clientDomain;
+/** Run the fast server checks against https://{host}/. */
+export async function runSiteChecks(host: string): Promise<Check[]> {
   const siteUrl = `https://${host}/`;
+  const [online, ssl, search] = await Promise.all([
+    checkOnline(siteUrl),
+    checkSecureConnection(host),
+    checkSearchFiles(siteUrl),
+  ]);
+  return [online.check, ssl, checkSecurityHeaders(online.headers), search];
+}
 
+// Google's own score bands: 90+ good, 50–89 needs improvement, under 50 poor.
+function band(score: number): Status {
+  if (score >= 90) return 'good';
+  if (score >= 50) return 'warn';
+  return 'bad';
+}
+
+/**
+ * Google PageSpeed (phone) scores as checks. Throws when Google can't
+ * measure the page — the caller keeps the rest of the snapshot and retries
+ * on a later run.
+ */
+export async function runSpeedChecks(siteUrl: string, apiKey: string, timeoutMs = 25_000): Promise<Check[]> {
+  const params = new URLSearchParams({ url: siteUrl, strategy: 'mobile', key: apiKey });
+  for (const c of ['performance', 'accessibility', 'seo']) params.append('category', c);
+
+  const t = withTimeout(timeoutMs);
   try {
-    const [online, ssl, search] = await Promise.all([
-      checkOnline(siteUrl),
-      checkSecureConnection(host),
-      checkSearchFiles(siteUrl),
-    ]);
+    const res = await fetch(`https://www.googleapis.com/pagespeedonline/v5/runPagespeed?${params}`, { signal: t.signal });
+    if (!res.ok) throw new Error(`PageSpeed returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const data = await res.json();
+    const cats = data.lighthouseResult?.categories ?? {};
+    const score = (key: string) => Math.round((cats[key]?.score ?? 0) * 100);
+    const lcpMs = data.lighthouseResult?.audits?.['largest-contentful-paint']?.numericValue;
+    const lcp = typeof lcpMs === 'number' ? ` The main content takes ${(lcpMs / 1000).toFixed(1)} seconds to appear on a phone.` : '';
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify({
-        success: true,
-        url: siteUrl,
-        checkedAt: new Date().toISOString(),
-        checks: [online.check, ssl, checkSecurityHeaders(online.headers), search],
-      }),
-    };
-  } catch (err) {
-    console.error('Site health check error:', err);
-    return { statusCode: 500, body: JSON.stringify({ error: 'Health check failed' }) };
+    const speed = score('performance');
+    const a11y = score('accessibility');
+    const seo = score('seo');
+    return [
+      { id: 'speed', label: 'Speed on phones', status: band(speed), score: speed, summary: `Scores ${speed} out of 100 on Google’s phone speed test.${lcp}` },
+      { id: 'a11y', label: 'Easy for everyone to use', status: band(a11y), score: a11y, summary: `Scores ${a11y} out of 100 on Google’s accessibility test.` },
+      { id: 'seo', label: 'Search-friendly pages', status: band(seo), score: seo, summary: `Scores ${seo} out of 100 on Google’s search basics test.` },
+    ];
+  } finally {
+    t.done();
   }
 }
+
+export const SPEED_CHECK_IDS = ['speed', 'a11y', 'seo'];
+export const SNAPSHOT_STORE = 'site-health';

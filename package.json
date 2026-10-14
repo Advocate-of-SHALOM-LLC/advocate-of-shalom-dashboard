@@ -11,6 +11,7 @@
   "dependencies": {
     "@auth0/auth0-vue": "^2.9.0",
     "@libsql/client": "^0.14.0",
+    "@netlify/blobs": "^11.1.4",
     "@sanity/client": "^7.27.0",
     "@vueuse/core": "^12.8.2",
     "chart.js": "^4.5.1",
