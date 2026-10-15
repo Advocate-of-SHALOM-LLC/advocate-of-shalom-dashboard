@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import { Users, Eye, Clock, TrendingUp, TrendingDown, Minus, ExternalLink, RefreshCw } from 'lucide-vue-next';
 import { Chart, BarElement, CategoryScale, LinearScale, Tooltip } from 'chart.js';
 import config from '@/config/dashboard';
 
 Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
+
+const { getAccessTokenSilently } = useAuth0();
 
 const analytics = config.analytics;
 const internalRoutes = analytics?.internalRoutes ?? ['/analytics', '/billing', '/social', '/support'];
@@ -108,14 +111,16 @@ async function fetchAnalytics() {
   error.value = null;
 
   try {
-    const hostname = analytics?.simpleAnalyticsId || config.clientDomain;
     const { start, end, prevStart, prevEnd } = getDateRange(period.value);
     const interval = PERIOD_INTERVAL[period.value];
+    const token = await getAccessTokenSilently();
+    const headers = { Authorization: `Bearer ${token}` };
 
+    // The proxy always reads this dashboard's own site, so no hostname is sent.
     const [currentRes, previousRes] = await Promise.all([
-      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${start}&end=${end}&interval=${interval}`),
+      fetch(`/.netlify/functions/analytics-proxy?start=${start}&end=${end}&interval=${interval}`, { headers }),
       prevStart && prevEnd
-        ? fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${prevStart}&end=${prevEnd}`)
+        ? fetch(`/.netlify/functions/analytics-proxy?start=${prevStart}&end=${prevEnd}`, { headers })
         : Promise.resolve(null),
     ]);
 

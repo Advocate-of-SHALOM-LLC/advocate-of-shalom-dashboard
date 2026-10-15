@@ -1,5 +1,8 @@
 import Stripe from 'stripe';
 
+import { requireUser } from '../lib/auth';
+import dashboardConfig from '../../src/config/dashboard';
+
 interface BillingSummary {
   subscription: {
     id: string;
@@ -53,15 +56,14 @@ interface BillingSummary {
   } | null;
 }
 
-export async function handler(event: { queryStringParameters: Record<string, string> | null; headers: Record<string, string> }) {
-  const authHeader = event.headers['authorization'] || event.headers['Authorization'];
-  if (!authHeader) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
+export async function handler(event: { headers: Record<string, string> }) {
+  const auth = await requireUser(event.headers);
+  if ('response' in auth) return auth.response;
 
-  const customerId = event.queryStringParameters?.customerId;
+  // Always this dashboard's own customer — never one named in the request.
+  const customerId = dashboardConfig.billing?.stripeCustomerId;
   if (!customerId) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing customerId' }) };
+    return { statusCode: 404, body: JSON.stringify({ error: 'Billing is not set up for this dashboard' }) };
   }
 
   const stripeConfig = process.env.STRIPE_CONFIG;

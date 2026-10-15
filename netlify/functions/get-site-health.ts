@@ -4,6 +4,7 @@
  * site-health-monthly.
  */
 import { getStore } from '@netlify/blobs';
+import { requireUser } from '../lib/auth';
 import { SNAPSHOT_STORE, type HealthSnapshot } from '../lib/site-health';
 
 export default async (req: Request) => {
@@ -11,9 +12,10 @@ export default async (req: Request) => {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
 
-  // Presence-only Auth0 gate — same pattern as the billing functions.
-  if (!req.headers.get('authorization')) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const auth = await requireUser(Object.fromEntries(req.headers));
+  if ('response' in auth) {
+    const { statusCode, headers, body } = auth.response;
+    return new Response(body, { status: statusCode, headers });
   }
 
   try {

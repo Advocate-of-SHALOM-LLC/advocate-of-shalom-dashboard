@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useAuth0 } from '@auth0/auth0-vue';
 import { RouterLink } from 'vue-router';
 import { BarChart3, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-vue-next';
 import config from '@/config/dashboard';
+
+const { getAccessTokenSilently } = useAuth0();
 
 const analytics = config.analytics;
 const hasAnalytics = !!analytics?.provider;
@@ -33,16 +36,17 @@ async function fetchStats() {
   if (!isSA) return;
   loading.value = true;
   try {
-    const hostname = analytics?.simpleAnalyticsId || config.clientDomain;
     const now = new Date();
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const start = new Date(now); start.setDate(now.getDate() - 30);
     const prevStart = new Date(start); prevStart.setDate(start.getDate() - 30);
     const prevEnd = new Date(start); prevEnd.setDate(start.getDate() - 1);
 
+    const token = await getAccessTokenSilently();
+    const headers = { Authorization: `Bearer ${token}` };
     const [curRes, prevRes] = await Promise.all([
-      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${fmt(start)}&end=${fmt(now)}`),
-      fetch(`/.netlify/functions/analytics-proxy?hostname=${hostname}&start=${fmt(prevStart)}&end=${fmt(prevEnd)}`),
+      fetch(`/.netlify/functions/analytics-proxy?start=${fmt(start)}&end=${fmt(now)}`, { headers }),
+      fetch(`/.netlify/functions/analytics-proxy?start=${fmt(prevStart)}&end=${fmt(prevEnd)}`, { headers }),
     ]);
 
     if (curRes.ok) {

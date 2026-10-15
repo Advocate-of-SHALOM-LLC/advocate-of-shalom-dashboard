@@ -5,11 +5,10 @@ import { Resend } from 'resend';
 // via Resend. Reply-to is the requester's email so a Reply from
 // the recipient lands back in the user's inbox directly.
 //
-// Auth: presence-only check on the Authorization header matches the
-// pattern used by stripe-get-billing-summary. Effectively UI-gated
-// (only Auth0-logged-in dashboard users hit this from the browser),
-// which blocks anonymous curl abuse without the JWKS overhead of
-// full JWT verification.
+// Auth: requireUser verifies the caller's Auth0 token, so only someone
+// signed in to this dashboard can send mail through it.
+
+import { requireUser } from '../lib/auth';
 
 interface SupportRequestPayload {
   name?: string;
@@ -39,10 +38,8 @@ export async function handler(event: {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const authHeader = event.headers['authorization'] || event.headers['Authorization'];
-  if (!authHeader) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
+  const auth = await requireUser(event.headers);
+  if ('response' in auth) return auth.response;
 
   let payload: SupportRequestPayload;
   try {

@@ -15,6 +15,9 @@
 //                  or an unpaid one-off already exists (still returned so the
 //                  UI can just open it — the caller doesn't need to distinguish)
 
+import { requireUser } from '../lib/auth';
+import dashboardConfig from '../../src/config/dashboard';
+
 interface UpstreamResponse {
   success: boolean;
   invoiceId?: string;
@@ -33,24 +36,25 @@ export async function handler(event: {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const authHeader = event.headers['authorization'] || event.headers['Authorization'];
-  if (!authHeader) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
+  const auth = await requireUser(event.headers);
+  if ('response' in auth) return auth.response;
 
-  let payload: { stripeCustomerId?: string; installmentNumber?: number };
+  let payload: { installmentNumber?: number };
   try {
     payload = JSON.parse(event.body || '{}');
   } catch {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const { stripeCustomerId, installmentNumber } = payload;
-  if (!stripeCustomerId || typeof installmentNumber !== 'number') {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: 'Missing stripeCustomerId or installmentNumber' }),
-    };
+  // The customer is always this dashboard's own — never one named in the request.
+  const stripeCustomerId = dashboardConfig.billing?.stripeCustomerId;
+  if (!stripeCustomerId) {
+    return { statusCode: 404, body: JSON.stringify({ error: 'Billing is not set up for this dashboard' }) };
+  }
+
+  const { installmentNumber } = payload;
+  if (typeof installmentNumber !== 'number' || !Number.isInteger(installmentNumber) || installmentNumber < 1) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Missing or invalid installmentNumber' }) };
   }
 
   const baseUrl = process.env.INSTALLMENT_API_BASE_URL;

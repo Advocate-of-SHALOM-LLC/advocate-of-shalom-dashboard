@@ -172,7 +172,7 @@ async function fetchBillingSummary(silent = false) {
   try {
     const token = await getAccessTokenSilently();
     const res = await fetch(
-      `/.netlify/functions/stripe-get-billing-summary?customerId=${billing.stripeCustomerId}`,
+      '/.netlify/functions/stripe-get-billing-summary',
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -229,7 +229,7 @@ async function fetchInstallments() {
   try {
     const token = await getAccessTokenSilently();
     const res = await fetch(
-      `/.netlify/functions/get-installment-schedule?stripeCustomerId=${billing.stripeCustomerId}`,
+      '/.netlify/functions/get-installment-schedule',
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -273,7 +273,7 @@ async function fetchMaintenanceSchedule() {
   try {
     const token = await getAccessTokenSilently();
     const res = await fetch(
-      `/.netlify/functions/get-maintenance-schedule?stripeCustomerId=${billing.stripeCustomerId}`,
+      '/.netlify/functions/get-maintenance-schedule',
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -302,10 +302,7 @@ async function payInstallmentEarly(n: number) {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        stripeCustomerId: billing.stripeCustomerId,
-        installmentNumber: n,
-      }),
+      body: JSON.stringify({ installmentNumber: n }),
     });
 
     const data = await res.json();
@@ -342,10 +339,7 @@ async function openPortal() {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        customerId: billing.stripeCustomerId,
-        returnUrl: window.location.href,
-      }),
+      body: JSON.stringify({ returnUrl: window.location.href }),
     });
 
     const data = await res.json();

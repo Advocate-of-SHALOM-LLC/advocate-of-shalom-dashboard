@@ -11,6 +11,9 @@
 //   GET .../get-maintenance-schedule?stripeCustomerId=cus_XXX
 //   Response: { cycleLabel, cycleShortLabel, amountCents, nextChargeDate, ... }
 
+import { requireUser } from '../lib/auth';
+import dashboardConfig from '../../src/config/dashboard';
+
 interface UpstreamResponse {
   success: boolean;
   cycleLabel?: string;
@@ -24,20 +27,18 @@ interface UpstreamResponse {
 export async function handler(event: {
   httpMethod: string;
   headers: Record<string, string>;
-  queryStringParameters: Record<string, string> | null;
 }) {
   if (event.httpMethod !== 'GET') {
     return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const authHeader = event.headers['authorization'] || event.headers['Authorization'];
-  if (!authHeader) {
-    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
-  }
+  const auth = await requireUser(event.headers);
+  if ('response' in auth) return auth.response;
 
-  const stripeCustomerId = event.queryStringParameters?.stripeCustomerId;
+  // Always this dashboard's own customer — never one named in the request.
+  const stripeCustomerId = dashboardConfig.billing?.stripeCustomerId;
   if (!stripeCustomerId) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Missing stripeCustomerId' }) };
+    return { statusCode: 404, body: JSON.stringify({ error: 'Billing is not set up for this dashboard' }) };
   }
 
   const baseUrl = process.env.INSTALLMENT_API_BASE_URL;

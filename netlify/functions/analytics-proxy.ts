@@ -2,21 +2,32 @@
  * Analytics Proxy — fetches from Simple Analytics API on behalf of the dashboard.
  * Keeps the SA API key server-side so it's never exposed to the client.
  *
- * Query params: hostname, start, end, interval (optional: day | week | month)
+ * Query params: start, end (YYYY-MM-DD), interval (optional: day | week | month).
+ * The site is always this dashboard's own (config) — never one named in the request.
  * When interval is set, the response also carries a real visitor histogram
  * for that range, bucketed by the interval.
  * Env: SIMPLE_ANALYTICS_API_KEY
  */
+
+import { requireUser } from '../lib/auth';
+import dashboardConfig from '../../src/config/dashboard';
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 export async function handler(event: {
+  headers: Record<string, string>;
   queryStringParameters: Record<string, string> | null;
 }) {
-  const { hostname, start, end, interval } = event.queryStringParameters || {};
+  const auth = await requireUser(event.headers);
+  if ('response' in auth) return auth.response;
+
+  const hostname = dashboardConfig.analytics?.simpleAnalyticsId || dashboardConfig.clientDomain;
+  const { start, end, interval } = event.queryStringParameters || {};
   const histogramInterval = interval && ['day', 'week', 'month'].includes(interval) ? interval : null;
 
-  if (!hostname || !start || !end) {
+  if (!start || !end || !ISO_DATE.test(start) || !ISO_DATE.test(end)) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing required params: hostname, start, end' }),
+      body: JSON.stringify({ error: 'start and end must be dates (YYYY-MM-DD)' }),
     };
   }
 
@@ -67,7 +78,7 @@ export async function handler(event: {
       statusCode: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=300',
+        'Cache-Control': 'private, max-age=300',
       },
       body: JSON.stringify({
         pageviews: stats.pageviews ?? 0,
