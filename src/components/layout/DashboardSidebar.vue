@@ -238,9 +238,12 @@ const navItems: NavItem[] = [
   color: white;
   font-weight: 600;
   font-size: 0.875rem;
-  white-space: nowrap;
+  /* Wrap to two lines before truncating (OVERVIEW-STANDARD.md §5). */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
 }
 
 .sidebar__label {

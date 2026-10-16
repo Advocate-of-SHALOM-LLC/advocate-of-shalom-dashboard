@@ -1,67 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { RouterLink } from 'vue-router';
-import { useAuth0 } from '@auth0/auth0-vue';
 import { Info, CheckCircle2, AlertTriangle, XOctagon, ExternalLink, ArrowRight } from 'lucide-vue-next';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
-import AnalyticsWidget from '@/components/widgets/AnalyticsWidget.vue';
-import TutorialsWidget from '@/components/widgets/TutorialsWidget.vue';
-import LinksWidget from '@/components/widgets/LinksWidget.vue';
-import ContentEditorWidget from '@/components/widgets/ContentEditorWidget.vue';
-import SiteHealthWidget from '@/components/widgets/SiteHealthWidget.vue';
+import OverviewGreeting from '@/components/overview/OverviewGreeting.vue';
+import AttentionStrip from '@/components/overview/AttentionStrip.vue';
+import MonthToDate from '@/components/overview/MonthToDate.vue';
+import WebTeamCard from '@/components/overview/WebTeamCard.vue';
+import SiteHealth from '@/components/overview/SiteHealth.vue';
 import MonthlyReportWidget from '@/components/widgets/MonthlyReportWidget.vue';
+import TutorialsWidget from '@/components/widgets/TutorialsWidget.vue';
+import ContentEditorWidget from '@/components/widgets/ContentEditorWidget.vue';
+import { useOverview } from '@/composables/useOverview';
 import config from '@/config/dashboard';
 
-const { user } = useAuth0();
+/**
+ * The page the client lands on, read top to bottom (OVERVIEW-STANDARD.md):
+ *
+ *   1. who it's for, and the things they came to do (greeting, quick actions)
+ *   2. anything waiting on them (an amount due)
+ *   3. how this month is going, live
+ *   4. how last month went, settled (the monthly report)
+ *   …with the web team's latest note and the site's health alongside.
+ *
+ * Links and the analytics summary used to sit here as separate widgets; their
+ * content now lives in the greeting and the month-so-far card.
+ */
+const { month, monthState, lighthouse, healthState, webTeam, webTeamState, charges, chargesLoaded, load } = useOverview();
 
-const widgetMap: Record<string, unknown> = {
-  siteAnalytics: AnalyticsWidget,
-  tutorials: TutorialsWidget,
-  links: LinksWidget,
-  contentEditors: ContentEditorWidget,
-  siteHealth: SiteHealthWidget,
-  monthlyReport: MonthlyReportWidget,
-};
-
-const activeWidgets = computed(() =>
-  config.enabledWidgets
-    .filter((w) => w in widgetMap)
-    .map((w) => ({ key: w, component: widgetMap[w]! }))
-);
-
-// Best-guess first name from the Auth0 user object.
-// Priority: given_name → real display name (not the email) → capitalized
-// email local-part. Auth0 often sets user.name to the email itself when
-// no display name exists, so we skip user.name if it contains '@' and
-// fall through to derive "elyse@example.com" → "Elyse".
-const firstName = computed(() => {
-  const u = user.value;
-  if (!u) return '';
-
-  if (u.given_name) return u.given_name;
-
-  const name = (u.name || '').trim();
-  if (name && !name.includes('@')) {
-    const firstToken = name.split(/\s+/)[0];
-    if (firstToken) return firstToken;
-  }
-
-  const email = (u.email || '').trim();
-  const localPart = email.split('@')[0];
-  if (localPart) return localPart.charAt(0).toUpperCase() + localPart.slice(1);
-
-  return '';
-});
-
-const timeGreeting = computed(() => {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-});
-
-const greeting = computed(() =>
-  firstName.value ? `${timeGreeting.value}, ${firstName.value}` : `${timeGreeting.value}`
+/** Optional extras some clients have; none are enabled for this client today. */
+const extras = computed(() =>
+  [
+    config.enabledWidgets.includes('tutorials') ? TutorialsWidget : null,
+    config.enabledWidgets.includes('contentEditors') ? ContentEditorWidget : null,
+  ].filter(Boolean)
 );
 
 // Announcement icon by level. Small mapping keeps the template clean.
@@ -72,10 +44,7 @@ const announcementIconMap = {
   critical: XOctagon,
 } as const;
 
-const announcementIcon = computed(() => {
-  const level = config.announcement?.level || 'info';
-  return announcementIconMap[level];
-});
+const announcementIcon = computed(() => announcementIconMap[config.announcement?.level || 'info']);
 
 // Route absolute URLs through <a target="_blank">; relative paths through
 // RouterLink so the SPA doesn't do a full reload.
@@ -83,16 +52,14 @@ const isInternalLink = computed(() => {
   const url = config.announcement?.link?.url || '';
   return url.startsWith('/') && !url.startsWith('//');
 });
+
+onMounted(load);
 </script>
 
 <template>
   <DashboardLayout page-title="Overview">
     <div class="overview">
-      <!-- Greeting -->
-      <header class="overview__greeting">
-        <h2 class="overview__hello">{{ greeting }}</h2>
-        <p class="overview__sub">Here's what's happening with {{ config.clientName }}.</p>
-      </header>
+      <OverviewGreeting />
 
       <!-- Announcement banner (config-driven; nothing renders when undefined) -->
       <div
@@ -123,41 +90,34 @@ const isInternalLink = computed(() => {
         </a>
       </div>
 
-      <!-- Widgets -->
-      <div class="overview__grid">
-        <component
-          v-for="widget in activeWidgets"
-          :is="widget.component"
-          :key="widget.key"
-        />
+      <AttentionStrip :charges="charges" :loaded="chargesLoaded" />
+
+      <div class="overview__columns">
+        <div class="overview__main">
+          <MonthToDate :month="month" :state="monthState" />
+          <MonthlyReportWidget />
+        </div>
+        <aside class="overview__side" aria-label="Your web team and site health">
+          <WebTeamCard :web-team="webTeam" :state="webTeamState" />
+          <SiteHealth :lighthouse="lighthouse" :state="healthState" />
+        </aside>
+      </div>
+
+      <div v-if="extras.length" class="overview__extras">
+        <component :is="extra" v-for="(extra, i) in extras" :key="i" />
       </div>
     </div>
   </DashboardLayout>
 </template>
 
 <style scoped>
-.overview {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
+.overview { display: flex; flex-direction: column; gap: 1.5rem; max-width: 1400px; }
+.overview__columns { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+.overview__main, .overview__side { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
+.overview__extras { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.5rem; }
 
-.overview__greeting {
-  margin-bottom: 0.25rem;
-}
-
-.overview__hello {
-  font-family: var(--font-heading);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--color-text);
-  margin: 0 0 0.25rem;
-}
-
-.overview__sub {
-  font-size: 0.9375rem;
-  color: var(--color-text-secondary, var(--color-text));
-  margin: 0;
+@media (min-width: 1180px) {
+  .overview__columns { grid-template-columns: minmax(0, 1.7fr) minmax(320px, 1fr); }
 }
 
 /* Banner — colors driven by level, using CSS custom properties so the
@@ -219,11 +179,5 @@ const isInternalLink = computed(() => {
   background: color-mix(in srgb, #dc2626 12%, transparent);
   border-color: color-mix(in srgb, #dc2626 40%, transparent);
   color: var(--color-text);
-}
-
-.overview__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.25rem;
 }
 </style>

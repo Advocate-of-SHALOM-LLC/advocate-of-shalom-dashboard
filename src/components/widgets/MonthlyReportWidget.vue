@@ -10,7 +10,7 @@ import { useReports, monthName, nextReportDate, changeWords, changeDirection } f
  * same all month so it can be read, shared and referred back to.
  *
  * From the RMWS reference, with tiles for whatever this client measures
- * (OVERVIEW-STANDARD.md, 3.4) and the template's widget styling.
+ * (OVERVIEW-STANDARD.md, 3.4).
  */
 const { state, report, load } = useReports();
 
@@ -61,14 +61,14 @@ onMounted(() => load());
 </script>
 
 <template>
-  <section class="widget report-card" aria-labelledby="report-card-title">
-    <header class="report-card__head">
-      <h2 id="report-card-title" class="widget__title">
+  <section class="card report-card" aria-labelledby="report-card-title">
+    <header class="card__head">
+      <h2 id="report-card-title" class="card__title">
         <FileBarChart :size="18" aria-hidden="true" />
         <template v-if="report">{{ monthName(report.month) }} report</template>
         <template v-else>Monthly report</template>
       </h2>
-      <RouterLink v-if="report" to="/reports" class="report-card__link">Full report &rarr;</RouterLink>
+      <RouterLink v-if="report" to="/reports" class="card__link">Full report &rarr;</RouterLink>
     </header>
 
     <div v-if="state === 'loading'" class="report-card__status" role="status">
@@ -104,32 +104,7 @@ onMounted(() => load());
 </template>
 
 <style scoped>
-.widget {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius);
-  padding: 1.25rem;
-}
-
-/* Full width: the tiles and sentences need the room */
-.report-card {
-  grid-column: 1 / -1;
-  border-top: 3px solid var(--color-primary);
-}
-
-.widget__title {
-  font-size: 1rem;
-  font-family: var(--font-heading);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-  color: var(--color-text);
-}
-
-.report-card__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 0.5rem 1rem; margin-bottom: 1rem; }
-.report-card__link { font-size: 0.8125rem; font-weight: 600; color: var(--color-primary); text-decoration: none; }
-.report-card__link:hover { text-decoration: underline; }
+.report-card { border-top: 3px solid var(--color-primary); }
 
 .report-card__status { display: flex; align-items: center; gap: 0.5rem; margin: 0; font-size: 0.875rem; color: var(--color-text-secondary, var(--color-text)); }
 .report-card__spin { animation: report-spin 1s linear infinite; }

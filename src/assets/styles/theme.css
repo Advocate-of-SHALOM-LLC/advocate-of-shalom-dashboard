@@ -1,22 +1,30 @@
-/* Font imports — scaffolder injects @import statements above :root */
+/* Fonts: self-hosted variable faces, imported in main.ts (@fontsource-variable). */
 
 :root {
   --color-primary: #1e3d6e;
   --color-secondary: #4a72a8;
   --color-accent: #c4962a;
-  --color-bg: #ffffff;
-  --color-surface: #f2f4f7;
+  /* Cards sit on the page rather than being drawn onto it: a cool off-white
+     ground (a whisper of the brand navy), white cards, a soft navy-tinted
+     shadow and a lighter line (OVERVIEW-STANDARD.md §5). */
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
   --color-text: #1f2937;
   --color-text-secondary: #4b5563;
   --color-text-inverse: #ffffff;
-  --color-border: #dbdfe5;
+  /* Text on the brand navy, white in both themes. */
+  --color-on-primary: #ffffff;
+  /* Link text on cards. The navy itself is too dark to read on dark cards. */
+  --color-link: #1e3d6e;
+  --color-border: #e2e6ed;
+  --shadow-card: 0 1px 2px rgba(13, 27, 48, 0.04), 0 2px 8px rgba(13, 27, 48, 0.05);
   --color-sidebar-bg: #0d1b30;
   --color-sidebar-text: #e5e7eb;
   --color-sidebar-hover: #142848;
   --color-sidebar-active: #19325a;
-  --font-heading: 'Playfair Display', sans-serif;
-  --font-body: 'Source Sans 3', sans-serif;
-  --border-radius: 4px;
+  --font-heading: 'Playfair Display Variable', 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --font-body: 'Source Sans 3 Variable', 'Source Sans 3', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --border-radius: 0.5rem;
   /* Trend and score-band text, AA on the card surface (OVERVIEW-STANDARD.md §5) */
   --color-up: #15803d;
   --color-down: #b91c1c;
@@ -35,6 +43,9 @@
      so this must stay white regardless of light/dark. */
   --color-text-inverse: #ffffff;
   --color-border: #354153;
+  --color-on-primary: #ffffff;
+  --color-link: #9db9e6;
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3);
   --color-sidebar-bg: #091220;
   --color-sidebar-text: #d1d5db;
   --color-sidebar-hover: #0f1f38;

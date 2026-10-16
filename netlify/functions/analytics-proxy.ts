@@ -3,6 +3,8 @@
  * Keeps the SA API key server-side so it's never exposed to the client.
  *
  * Query params: start, end (YYYY-MM-DD), interval (optional: day | week | month).
+ * Or ?period=mtd: this month so far against the same days of last month, for
+ * the overview.
  * The site is always this dashboard's own (config) — never one named in the request.
  * When interval is set, the response also carries a real visitor histogram
  * for that range, bucketed by the interval.
@@ -10,6 +12,7 @@
  */
 
 import { requireUser } from '../lib/auth';
+import { monthToDate } from '../lib/simple-analytics';
 import dashboardConfig from '../../src/config/dashboard';
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -19,6 +22,22 @@ export async function handler(event: {
 }) {
   const auth = await requireUser(event.headers);
   if ('response' in auth) return auth.response;
+
+  if (event.queryStringParameters?.period === 'mtd') {
+    if (dashboardConfig.analytics?.provider !== 'simple-analytics' || !process.env.SIMPLE_ANALYTICS_API_KEY) {
+      return { statusCode: 200, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configured: false }) };
+    }
+    try {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=300' },
+        body: JSON.stringify(await monthToDate()),
+      };
+    } catch (err) {
+      console.error('Analytics month-to-date error:', err instanceof Error ? err.message : err);
+      return { statusCode: 502, body: JSON.stringify({ error: 'Visitor figures are unavailable just now.' }) };
+    }
+  }
 
   const hostname = dashboardConfig.analytics?.simpleAnalyticsId || dashboardConfig.clientDomain;
   const { start, end, interval } = event.queryStringParameters || {};

@@ -12,12 +12,7 @@ const config: DashboardConfig = {
     "level": "info",
     "link": { "label": "See installments", "url": "/billing" }
   },
-  "enabledWidgets": [
-    "monthlyReport",
-    "siteAnalytics",
-    "siteHealth",
-    "links"
-  ],
+  "enabledWidgets": [],
   "tutorialVideos": [],
   "links": [
     {

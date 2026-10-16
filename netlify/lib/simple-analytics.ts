@@ -93,3 +93,51 @@ export async function monthDetail(start: string, end: string) {
     sources,
   };
 }
+
+// ─── This month so far (overview) ───────────────────────────────────────────
+
+const shiftMonth = (month: string, by: number) => {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7);
+};
+const daysIn = (month: string) => {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m, 0)).getUTCDate();
+};
+
+/**
+ * The current calendar month to date, against the same days of last month,
+ * with a daily series for the overview's sparkline. "Last month" is left out
+ * when it predates tracking, or was the partial month tracking began in
+ * (OVERVIEW-STANDARD.md 4.4).
+ */
+export async function monthToDate() {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: reportTimeZone() }).format(new Date());
+  const month = today.slice(0, 7);
+  const day = Number(today.slice(8, 10));
+  const prevMonth = shiftMonth(month, -1);
+  const prevDays = daysIn(prevMonth);
+  const sameDayLastMonth = `${prevMonth}-${String(Math.min(day, prevDays)).padStart(2, '0')}`;
+
+  const started = await trackingStartMonth(today);
+  const comparable = Boolean(started && prevMonth > started);
+
+  const [current, previous, lastMonth] = await Promise.all([
+    query(`${month}-01`, today, ['visitors', 'seconds_on_page', 'histogram'], { interval: 'day' }),
+    comparable ? monthVisits(`${prevMonth}-01`, sameDayLastMonth) : Promise.resolve(null),
+    started && prevMonth >= started ? monthVisits(`${prevMonth}-01`, `${prevMonth}-${prevDays}`) : Promise.resolve(null),
+  ]);
+
+  return {
+    configured: true,
+    label: 'visits' as const,
+    month,
+    current: {
+      visits: current.visitors ?? 0,
+      avgSeconds: typeof current.seconds_on_page === 'number' && current.seconds_on_page > 0 ? Math.round(current.seconds_on_page) : null,
+    },
+    previous: previous === null ? null : { visits: previous },
+    lastMonth: lastMonth === null ? null : { month: prevMonth, visits: lastMonth },
+    series: (current.histogram ?? []).map((h) => ({ key: h.date.slice(0, 10), visits: h.visitors ?? 0 })),
+  };
+}

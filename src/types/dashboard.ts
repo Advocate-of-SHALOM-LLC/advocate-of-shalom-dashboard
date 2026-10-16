@@ -1,10 +1,9 @@
-export type WidgetType =
-  | 'siteAnalytics'
-  | 'tutorials'
-  | 'links'
-  | 'contentEditors'
-  | 'siteHealth'
-  | 'monthlyReport';
+/**
+ * Optional extra panels below the overview. The overview's own parts
+ * (greeting, attention strip, month so far, report, web team, site health)
+ * are always shown and aren't listed here.
+ */
+export type WidgetType = 'tutorials' | 'contentEditors';
 
 export interface TutorialVideo {
   title: string;
