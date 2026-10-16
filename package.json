@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "reports:generate": "node scripts/generate-reports.mjs",
+    "lighthouse:check": "node scripts/check-lighthouse.mjs",
+    "typecheck": "vue-tsc -b && tsc -p netlify/tsconfig.json"
   },
   "dependencies": {
     "@auth0/auth0-vue": "^2.9.0",
     "@libsql/client": "^0.14.0",
-    "@netlify/blobs": "^11.1.4",
     "@sanity/client": "^7.27.0",
     "@vueuse/core": "^12.8.2",
     "chart.js": "^4.5.1",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.20.2",
     "@vitejs/plugin-vue": "^5.2.4",
     "tailwindcss": "^4.3.3",
     "typescript": "~5.7.3",

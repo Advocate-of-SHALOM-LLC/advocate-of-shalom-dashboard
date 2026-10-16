@@ -13,9 +13,10 @@ const config: DashboardConfig = {
     "link": { "label": "See installments", "url": "/billing" }
   },
   "enabledWidgets": [
-    "links",
+    "monthlyReport",
     "siteAnalytics",
-    "siteHealth"
+    "siteHealth",
+    "links"
   ],
   "tutorialVideos": [],
   "links": [
@@ -53,6 +54,7 @@ const config: DashboardConfig = {
     }
   ],
   "contentEditors": [],
+  "submissionKinds": [],
   "billing": {
     "stripeCustomerId": "cus_UVmyRmEDdIrC1H",
     "showPendingCharges": true,

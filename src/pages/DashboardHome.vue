@@ -9,6 +9,7 @@ import TutorialsWidget from '@/components/widgets/TutorialsWidget.vue';
 import LinksWidget from '@/components/widgets/LinksWidget.vue';
 import ContentEditorWidget from '@/components/widgets/ContentEditorWidget.vue';
 import SiteHealthWidget from '@/components/widgets/SiteHealthWidget.vue';
+import MonthlyReportWidget from '@/components/widgets/MonthlyReportWidget.vue';
 import config from '@/config/dashboard';
 
 const { user } = useAuth0();
@@ -19,6 +20,7 @@ const widgetMap: Record<string, unknown> = {
   links: LinksWidget,
   contentEditors: ContentEditorWidget,
   siteHealth: SiteHealthWidget,
+  monthlyReport: MonthlyReportWidget,
 };
 
 const activeWidgets = computed(() =>

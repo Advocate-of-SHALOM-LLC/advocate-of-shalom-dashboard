@@ -3,7 +3,8 @@ export type WidgetType =
   | 'tutorials'
   | 'links'
   | 'contentEditors'
-  | 'siteHealth';
+  | 'siteHealth'
+  | 'monthlyReport';
 
 export interface TutorialVideo {
   title: string;
@@ -69,6 +70,18 @@ export interface DashboardAnnouncement {
   link?: { label: string; url: string };
 }
 
+/**
+ * A kind of form submission the client's site saves to the inbox, e.g.
+ * { kind: 'contact', singular: 'inquiry', plural: 'inquiries' }. Drives the
+ * report's "People getting in touch" section; an empty list means the site
+ * has no inbox yet and that section is left out.
+ */
+export interface SubmissionKind {
+  kind: string;
+  singular: string;
+  plural: string;
+}
+
 export interface DashboardConfig {
   clientId: string;
   clientName: string;
@@ -99,4 +112,6 @@ export interface DashboardConfig {
   contentEditors: ContentEditor[];
   billing?: BillingConfig;
   analytics?: AnalyticsConfig;
+  /** See SubmissionKind. Empty until the site saves its form submissions. */
+  submissionKinds?: SubmissionKind[];
 }

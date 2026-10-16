@@ -8,6 +8,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import {
   LayoutDashboard,
+  FileBarChart,
   BarChart3,
   Megaphone,
   MessageSquare,
@@ -52,6 +53,7 @@ interface NavItem { to: string; label: string; icon: unknown }
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
+  { to: '/reports', label: 'Monthly Reports', icon: FileBarChart },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/social', label: 'Social Media', icon: Megaphone },
   { to: '/support', label: 'Contact & Support', icon: MessageSquare },
