@@ -47,6 +47,8 @@ interface Invoice {
   paidAt?: number | null;
   hostedInvoiceUrl: string | null;
   invoicePdf?: string | null;
+  // Recent payments only: marked paid outside Stripe (cash, check, Zelle).
+  paidOffline?: boolean;
   // Pending charges only. Invoices sharing a pairId are alternative ways to
   // pay the same charges (issued that way by the Pipeline Dashboard), not
   // separate bills.
@@ -89,6 +91,8 @@ interface MaintenanceSchedule {
 const subscription = ref<Subscription | null>(null);
 const pendingCharges = ref<Invoice[]>([]);
 const recentPayments = ref<Invoice[]>([]);
+// Credit on the Stripe balance, in cents; Stripe takes it off the next invoice.
+const creditBalance = ref(0);
 const paymentMethod = ref<PaymentMethod | null>(null);
 const portalLoading = ref(false);
 
@@ -208,6 +212,7 @@ async function fetchBillingSummary(silent = false) {
     subscription.value = data.subscription;
     pendingCharges.value = data.pendingCharges || [];
     recentPayments.value = data.recentPayments || [];
+    creditBalance.value = data.creditBalance || 0;
     paymentMethod.value = data.paymentMethod;
   } catch (err) {
     console.error('fetchBillingSummary caught:', err);
@@ -482,6 +487,14 @@ function chargeLabel(charge: Invoice) {
   return charge.description || charge.lineItems?.[0]?.description || charge.number || 'Invoice';
 }
 
+// What the subscription's next invoice will come to once the credit is
+// applied. Null when there's no credit or nothing scheduled to apply it to.
+const nextChargeAfterCredit = computed(() => {
+  const sub = subscription.value;
+  if (!creditBalance.value || !sub || sub.status !== 'active' || !sub.nextBillingDate) return null;
+  return Math.max(0, sub.amount - creditBalance.value);
+});
+
 // Card is silent when the customer isn't on installments (empty list) —
 // keeps the page clean for non-installment clients. Loading and error
 // states still render so we don't ghost the user during setup.
@@ -560,6 +573,12 @@ const intervalLabel = computed(
           <div v-if="subscription.nextBillingDate" class="billing-detail">
             <span class="billing-detail__label">Next Billing</span>
             <span class="billing-detail__value">{{ formatDate(subscription.nextBillingDate) }}</span>
+          </div>
+          <div v-if="nextChargeAfterCredit !== null" class="billing-detail">
+            <span class="billing-detail__label">After your credit</span>
+            <span class="billing-detail__value billing-detail__value--credit">
+              {{ formatCurrency(nextChargeAfterCredit, subscription.currency) }}
+            </span>
           </div>
           <div v-if="subscription.cancelAtPeriodEnd" class="billing-notice billing-notice--warning">
             Subscription will cancel at end of current period
@@ -649,6 +668,20 @@ const intervalLabel = computed(
         <div class="billing-card__header">
           <Clock :size="20" />
           <h3>Pending Charges</h3>
+        </div>
+
+        <!-- Credit on the Stripe balance: Stripe applies it to the next invoice. -->
+        <div v-if="creditBalance > 0" class="billing-credit" role="note">
+          <div class="billing-credit__row">
+            <span class="billing-credit__label">Credit on account</span>
+            <span class="billing-credit__amount">{{ formatCurrency(creditBalance) }}</span>
+          </div>
+          <p v-if="subscription && nextChargeAfterCredit !== null && subscription.nextBillingDate" class="billing-credit__note">
+            Applied automatically to your next invoice on {{ formatDate(subscription.nextBillingDate) }},
+            which drops from {{ formatCurrency(subscription.amount, subscription.currency) }}
+            to {{ formatCurrency(nextChargeAfterCredit, subscription.currency) }}.
+          </p>
+          <p v-else class="billing-credit__note">Applied automatically to your next invoice.</p>
         </div>
 
         <div v-if="pendingCharges.length > 0" class="billing-card__body">
@@ -762,7 +795,7 @@ const intervalLabel = computed(
               </span>
             </div>
             <div class="billing-invoice-row__actions">
-              <span class="billing-badge billing-badge--active">Paid</span>
+              <span class="billing-badge billing-badge--active">{{ payment.paidOffline ? 'Paid offline' : 'Paid' }}</span>
               <a
                 v-if="payment.invoicePdf"
                 :href="payment.invoicePdf"
@@ -1014,6 +1047,47 @@ const intervalLabel = computed(
   padding-top: 0.5rem;
   border-top: 1px solid var(--color-border);
   font-size: 0.8125rem;
+}
+
+/* Credit on account — sits above the charges so the client sees it before
+   anything they owe. Green, like the "Paid" badge: it's money in their favour. */
+.billing-credit {
+  margin: 1.25rem 1.25rem 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--border-radius);
+  border: 1px solid color-mix(in srgb, #059669 30%, transparent);
+  background-color: color-mix(in srgb, #059669 8%, transparent);
+}
+
+.billing-credit__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.billing-credit__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.billing-credit__amount {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-up, #059669);
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-credit__note {
+  margin: 0.3rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary, var(--color-text));
+}
+
+.billing-detail__value--credit {
+  color: var(--color-up, #059669);
 }
 
 .billing-support-link {

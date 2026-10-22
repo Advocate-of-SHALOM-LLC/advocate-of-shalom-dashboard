@@ -47,7 +47,14 @@ interface BillingSummary {
     paidAt: number | null;
     hostedInvoiceUrl: string | null;
     invoicePdf: string | null;
+    /** Marked paid outside Stripe (cash, check, Zelle): Stripe records $0 paid. */
+    paidOffline: boolean;
   }>;
+  /**
+   * Credit on the customer's Stripe balance, in cents (0 when none). Stripe
+   * applies it to the next invoice automatically.
+   */
+  creditBalance: number;
   paymentMethod: {
     brand: string;
     last4: string;
@@ -170,19 +177,43 @@ export async function handler(event: { headers: Record<string, string> }) {
       customer: customerId,
       status: 'paid',
       limit: 10,
+      // How each invoice was settled: a card payment, or a payment recorded
+      // by hand (cash, check, Zelle).
+      expand: ['data.payments'],
     });
 
-    const recentPayments: BillingSummary['recentPayments'] = paidInvoices.data.map((inv) => ({
-      id: inv.id,
-      number: inv.number,
-      amount: inv.amount_paid,
-      currency: inv.currency,
-      description: inv.description,
-      created: inv.created,
-      paidAt: inv.status_transitions?.paid_at ?? null,
-      hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
-      invoicePdf: inv.invoice_pdf ?? null,
-    }));
+    // Marked paid outside Stripe (cash, check, Zelle): settled by a payment
+    // record rather than a card payment. Older API versions flagged it as
+    // paid_out_of_band and reported $0 paid.
+    const paidOffline = (inv: (typeof paidInvoices.data)[number]) => {
+      if ((inv as any).paid_out_of_band) return true;
+      const payments = ((inv as any).payments?.data ?? []) as Array<{ status?: string; payment?: { type?: string } }>;
+      const byCard = payments.some((p) => p.status === 'paid' && p.payment?.type === 'payment_intent');
+      const byRecord = payments.some((p) => p.status === 'paid' && p.payment?.type === 'payment_record');
+      return byRecord && !byCard;
+    };
+
+    const recentPayments: BillingSummary['recentPayments'] = paidInvoices.data
+      // A $0 invoice (e.g. a subscription's trial period) isn't a payment.
+      .filter((inv) => inv.amount_due > 0 || inv.amount_paid > 0)
+      // An invoice closed as paid for bookkeeping (e.g. a failed charge whose
+      // installment was paid on another invoice) can be kept out of the
+      // client's list with metadata hideFromClient = "true".
+      .filter((inv) => inv.metadata?.hideFromClient !== 'true')
+      .map((inv) => ({
+        id: inv.id,
+        number: inv.number,
+        // Stripe records $0 paid on an invoice marked paid outside it, so show
+        // what the invoice was for.
+        amount: paidOffline(inv) ? inv.amount_due : inv.amount_paid,
+        currency: inv.currency,
+        description: inv.description || inv.lines?.data?.[0]?.description || null,
+        created: inv.created,
+        paidAt: inv.status_transitions?.paid_at ?? null,
+        hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
+        invoicePdf: inv.invoice_pdf ?? null,
+        paidOffline: paidOffline(inv),
+      }));
 
     // Default payment method
     let paymentMethod: BillingSummary['paymentMethod'] = null;
@@ -196,11 +227,15 @@ export async function handler(event: { headers: Record<string, string> }) {
       };
     }
 
+    // Stripe keeps credit as a negative balance.
+    const creditBalance = typeof customer.balance === 'number' && customer.balance < 0 ? -customer.balance : 0;
+
     const summary: BillingSummary = {
       subscription,
       pendingCharges,
       recentPayments,
       paymentMethod,
+      creditBalance,
     };
 
     return {
