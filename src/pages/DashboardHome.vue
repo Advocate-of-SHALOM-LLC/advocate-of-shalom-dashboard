@@ -44,12 +44,20 @@ const announcementIconMap = {
   critical: XOctagon,
 } as const;
 
-const announcementIcon = computed(() => announcementIconMap[config.announcement?.level || 'info']);
+// The first banner whose date window includes today (viewer's local date).
+const today = new Intl.DateTimeFormat('en-CA').format(new Date());
+const announcement = computed(() =>
+  (config.announcements ?? []).find(
+    (a) => (!a.showFrom || today >= a.showFrom) && (!a.showUntil || today <= a.showUntil)
+  ) ?? null
+);
+
+const announcementIcon = computed(() => announcementIconMap[announcement.value?.level || 'info']);
 
 // Route absolute URLs through <a target="_blank">; relative paths through
 // RouterLink so the SPA doesn't do a full reload.
 const isInternalLink = computed(() => {
-  const url = config.announcement?.link?.url || '';
+  const url = announcement.value?.link?.url || '';
   return url.startsWith('/') && !url.startsWith('//');
 });
 
@@ -63,29 +71,29 @@ onMounted(load);
 
       <!-- Announcement banner (config-driven; nothing renders when undefined) -->
       <div
-        v-if="config.announcement"
+        v-if="announcement"
         class="overview__banner"
-        :class="`overview__banner--${config.announcement.level || 'info'}`"
+        :class="`overview__banner--${announcement.level || 'info'}`"
         role="status"
       >
         <component :is="announcementIcon" :size="18" class="overview__banner-icon" />
-        <span class="overview__banner-msg">{{ config.announcement.message }}</span>
+        <span class="overview__banner-msg">{{ announcement.message }}</span>
         <RouterLink
-          v-if="config.announcement.link && isInternalLink"
-          :to="config.announcement.link.url"
+          v-if="announcement.link && isInternalLink"
+          :to="announcement.link.url"
           class="overview__banner-link"
         >
-          {{ config.announcement.link.label }}
+          {{ announcement.link.label }}
           <ArrowRight :size="12" />
         </RouterLink>
         <a
-          v-else-if="config.announcement.link"
-          :href="config.announcement.link.url"
+          v-else-if="announcement.link"
+          :href="announcement.link.url"
           target="_blank"
           rel="noopener"
           class="overview__banner-link"
         >
-          {{ config.announcement.link.label }}
+          {{ announcement.link.label }}
           <ExternalLink :size="12" />
         </a>
       </div>

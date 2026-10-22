@@ -7,11 +7,20 @@ const config: DashboardConfig = {
   "clientEmail": "elyse@advocateofshalom.com",
   "clientContactName": "Elyse",
   "clientLogo": "/apple-touch-icon.png",
-  "announcement": {
-    "message": "You can now pay upcoming installments ahead of schedule from the Billing page.",
-    "level": "info",
-    "link": { "label": "See installments", "url": "/billing" }
-  },
+  "announcements": [
+    {
+      "message": "Your website is fully paid off — thank you! You now have monthly reports: see how September went.",
+      "level": "success",
+      "link": { "label": "View reports", "url": "/reports" },
+      "showUntil": "2026-11-02"
+    },
+    {
+      "message": "Your homepage now loads much faster on phones. See the new speed score under Site health below.",
+      "level": "success",
+      "showFrom": "2026-11-03",
+      "showUntil": "2026-11-30"
+    }
+  ],
   "enabledWidgets": [],
   "tutorialVideos": [],
   "links": [

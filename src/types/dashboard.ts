@@ -67,6 +67,10 @@ export interface DashboardAnnouncement {
   level?: 'info' | 'success' | 'warning' | 'critical';
   /** Optional CTA appended to the message (e.g. "Learn more"). */
   link?: { label: string; url: string };
+  /** First day to show it, YYYY-MM-DD in the viewer's local time (inclusive). */
+  showFrom?: string;
+  /** Last day to show it, YYYY-MM-DD in the viewer's local time (inclusive). */
+  showUntil?: string;
 }
 
 /**
@@ -100,11 +104,13 @@ export interface DashboardConfig {
    */
   clientLogo?: string;
   /**
-   * Optional banner rendered above the Overview widgets. Push messages
-   * to the client by setting this and committing — no runtime API needed.
-   * Set to undefined (or remove) to hide it.
+   * Banners for the Overview, in priority order. The first one whose
+   * showFrom/showUntil window includes today is shown, so a banner can be
+   * scheduled ahead and swaps on its own without a deploy. Push messages to
+   * the client by editing this and committing — no runtime API needed.
+   * Empty (or omitted) hides the banner.
    */
-  announcement?: DashboardAnnouncement;
+  announcements?: DashboardAnnouncement[];
   enabledWidgets: string[];
   tutorialVideos: TutorialVideo[];
   links: DashboardLink[];
