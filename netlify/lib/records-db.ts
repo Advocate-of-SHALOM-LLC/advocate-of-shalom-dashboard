@@ -26,6 +26,49 @@ const SCHEMA = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_client_records_owner
     ON client_records (owner_id, deleted_at)`,
+
+  // ─── P&L (cash basis) ───
+  // Signed whole cents: money in positive, money out negative.
+  `CREATE TABLE IF NOT EXISTS ledger_transactions (
+    id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    owner_id      TEXT NOT NULL,
+    date          TEXT NOT NULL,
+    description   TEXT NOT NULL,
+    amount_cents  INTEGER NOT NULL,
+    category      TEXT NOT NULL DEFAULT 'uncategorized',
+    account       TEXT NOT NULL DEFAULT '',
+    source        TEXT NOT NULL DEFAULT 'manual',
+    import_id     TEXT,
+    -- Imported rows only: what makes a re-upload of the same file add nothing.
+    fingerprint   TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at    TEXT
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_ledger_owner_date
+    ON ledger_transactions (owner_id, deleted_at, date)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_ledger_fingerprint
+    ON ledger_transactions (owner_id, fingerprint)
+    WHERE fingerprint IS NOT NULL AND deleted_at IS NULL`,
+  `CREATE TABLE IF NOT EXISTS ledger_imports (
+    id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+    owner_id       TEXT NOT NULL,
+    file_name      TEXT NOT NULL,
+    account        TEXT NOT NULL DEFAULT '',
+    rows_imported  INTEGER NOT NULL DEFAULT 0,
+    rows_skipped   INTEGER NOT NULL DEFAULT 0,
+    created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+    undone_at      TEXT
+  )`,
+  // How each bank's CSV layout maps to transactions, so it's asked only once.
+  `CREATE TABLE IF NOT EXISTS ledger_import_layouts (
+    owner_id    TEXT NOT NULL,
+    signature   TEXT NOT NULL,
+    mapping     TEXT NOT NULL,
+    account     TEXT NOT NULL DEFAULT '',
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (owner_id, signature)
+  )`,
 ];
 
 let client: Client | null = null;

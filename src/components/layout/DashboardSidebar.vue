@@ -9,6 +9,7 @@ import { useAuth0 } from '@auth0/auth0-vue';
 import {
   LayoutDashboard,
   Users,
+  Wallet,
   FileBarChart,
   BarChart3,
   Megaphone,
@@ -52,7 +53,7 @@ function toggleDarkMode() {
 
 interface NavItem { to: string; label: string; icon: unknown }
 
-// Private business records (Clients) appear only for the people allowed to
+// Private business records (Clients, Profit & Loss) appear only for the people allowed to
 // open them; the server functions enforce the same list.
 const canSeePrivate = computed(() => {
   const email = user.value?.email?.toLowerCase();
@@ -62,7 +63,12 @@ const canSeePrivate = computed(() => {
 const navItems = computed<NavItem[]>(() => [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/reports', label: 'Monthly Reports', icon: FileBarChart },
-  ...(canSeePrivate.value ? [{ to: '/clients', label: 'Clients', icon: Users }] : []),
+  ...(canSeePrivate.value
+    ? [
+        { to: '/clients', label: 'Clients', icon: Users },
+        { to: '/finances', label: 'Profit & Loss', icon: Wallet },
+      ]
+    : []),
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/social', label: 'Social Media', icon: Megaphone },
   { to: '/support', label: 'Contact & Support', icon: MessageSquare },

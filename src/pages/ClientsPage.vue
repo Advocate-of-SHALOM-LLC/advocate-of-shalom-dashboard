@@ -317,39 +317,4 @@ function exportCsv() {
   .clients__updated { text-align: left; }
 }
 
-.btn {
-  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 0.95rem; border-radius: 999px;
-  border: 1px solid var(--color-border); font: inherit; font-size: 0.875rem; font-weight: 600; cursor: pointer; white-space: nowrap;
-}
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn--primary { background-color: var(--color-primary); border-color: var(--color-primary); color: var(--color-on-primary); }
-.btn--secondary { background-color: var(--color-surface); color: var(--color-text); box-shadow: var(--shadow-card); }
-.btn--secondary:hover:not(:disabled) { border-color: var(--color-primary); }
-.btn--danger { background-color: var(--color-down); border-color: var(--color-down); color: #fff; }
-.btn--quiet { border-color: transparent; background: none; color: var(--color-down); padding-inline: 0.5rem; }
-
-.editor {
-  /* The global reset zeroes margins; a modal dialog centers with margin: auto. */
-  margin: auto;
-  width: min(640px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid var(--color-border);
-  border-radius: calc(var(--border-radius) * 1.5); background-color: var(--color-surface); color: var(--color-text);
-  box-shadow: 0 10px 40px rgba(13, 27, 48, 0.25);
-}
-.editor::backdrop { background: rgba(13, 27, 48, 0.45); }
-.editor__form { display: flex; flex-direction: column; gap: 1rem; padding: 1.25rem 1.5rem 1.5rem; }
-.editor__head { display: flex; align-items: center; justify-content: space-between; }
-.editor__close { display: grid; place-items: center; width: 2rem; height: 2rem; border: none; border-radius: 50%; background: none; color: var(--color-text-secondary); cursor: pointer; }
-.editor__close:hover { background-color: var(--color-bg); }
-.editor__field { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.8125rem; font-weight: 600; color: var(--color-text-secondary); }
-.editor__field input,
-.editor__field textarea {
-  padding: 0.6rem 0.75rem; border: 1px solid var(--color-border); border-radius: var(--border-radius);
-  background-color: var(--color-bg); color: var(--color-text); font: inherit; font-size: 0.9375rem; font-weight: 400; line-height: 1.5; resize: vertical;
-}
-.editor__field input:focus,
-.editor__field textarea:focus { outline: 2px solid var(--color-primary); outline-offset: 0; border-color: transparent; }
-.editor__error { margin: 0; font-size: 0.875rem; color: var(--color-down); }
-.editor__buttons { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.5rem; }
-.editor__delete { margin-right: auto; }
-.editor__confirm { margin-right: auto; font-size: 0.875rem; font-weight: 600; }
 </style>

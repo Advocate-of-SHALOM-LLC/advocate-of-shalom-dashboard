@@ -72,6 +72,7 @@ const config: DashboardConfig = {
     "internalRoutes": [
       "/analytics",
       "/clients",
+      "/finances",
       "/reports",
       "/billing",
       "/social",
