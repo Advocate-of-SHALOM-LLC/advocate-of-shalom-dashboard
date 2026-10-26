@@ -119,4 +119,10 @@ export interface DashboardConfig {
   analytics?: AnalyticsConfig;
   /** See SubmissionKind. Empty until the site saves its form submissions. */
   submissionKinds?: SubmissionKind[];
+  /**
+   * The only sign-ins that can open the client's private business records
+   * (client records, P&L). Enforced by the server functions; the menu also
+   * hides those pages from anyone else.
+   */
+  privateDataAccess?: string[];
 }

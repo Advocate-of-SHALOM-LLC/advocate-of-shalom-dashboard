@@ -16,6 +16,8 @@ export interface DashboardUser {
   sub: string;
   email?: string;
   name?: string;
+  /** False when Auth0 says the address hasn't been verified. */
+  emailVerified?: boolean;
 }
 
 interface UserInfo extends DashboardUser {
@@ -102,5 +104,30 @@ export async function requireUser(
     return { response: json(403, { error: 'This account does not have access to the dashboard.' }) };
   }
 
-  return { user: { sub: user.sub, email: user.email, name: user.name } };
+  return { user: { sub: user.sub, email: user.email, name: user.name, emailVerified: user.email_verified } };
+}
+
+/**
+ * As requireUser, and also limited to the named people in
+ * config.privateDataAccess, with a verified address. For the client's own
+ * private records (e.g. client_records): a sign-in to the dashboard alone
+ * isn't enough to read them.
+ */
+export async function requirePrivateAccess(
+  headers: Record<string, string | undefined> | null | undefined,
+  allowed: string[]
+): Promise<{ user: DashboardUser } | { response: FunctionResponse }> {
+  const auth = await requireUser(headers);
+  if ('response' in auth) return auth;
+
+  const email = auth.user.email?.toLowerCase();
+  const listed = Boolean(email && allowed.map((a) => a.toLowerCase()).includes(email));
+  if (!listed) {
+    return { response: json(403, { error: 'This account does not have access to these records.' }) };
+  }
+  // An unverified address proves nothing about who owns it.
+  if (auth.user.emailVerified === false) {
+    return { response: json(403, { error: 'Please verify your email address to open these records. Check your inbox for the verification email.' }) };
+  }
+  return auth;
 }

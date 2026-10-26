@@ -59,6 +59,7 @@ const config: DashboardConfig = {
   ],
   "contentEditors": [],
   "submissionKinds": [],
+  "privateDataAccess": ["elyse@advocateofshalom.com", "eric@ericphiferllc.com"],
   "billing": {
     "stripeCustomerId": "cus_UVmyRmEDdIrC1H",
     "showPendingCharges": true,
@@ -70,6 +71,8 @@ const config: DashboardConfig = {
     "simpleAnalyticsId": "advocateofshalom.com",
     "internalRoutes": [
       "/analytics",
+      "/clients",
+      "/reports",
       "/billing",
       "/social",
       "/support"

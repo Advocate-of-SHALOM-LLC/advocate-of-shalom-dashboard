@@ -3,11 +3,12 @@
      build-tools/src/views/PreviewDashboardView.vue
      Do not edit the copy in pws-dashboard-template — it will be overwritten at scaffold time -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import {
   LayoutDashboard,
+  Users,
   FileBarChart,
   BarChart3,
   Megaphone,
@@ -51,14 +52,22 @@ function toggleDarkMode() {
 
 interface NavItem { to: string; label: string; icon: unknown }
 
-const navItems: NavItem[] = [
+// Private business records (Clients) appear only for the people allowed to
+// open them; the server functions enforce the same list.
+const canSeePrivate = computed(() => {
+  const email = user.value?.email?.toLowerCase();
+  return Boolean(email && (config.privateDataAccess ?? []).map((e) => e.toLowerCase()).includes(email));
+});
+
+const navItems = computed<NavItem[]>(() => [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/reports', label: 'Monthly Reports', icon: FileBarChart },
+  ...(canSeePrivate.value ? [{ to: '/clients', label: 'Clients', icon: Users }] : []),
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/social', label: 'Social Media', icon: Megaphone },
   { to: '/support', label: 'Contact & Support', icon: MessageSquare },
   { to: '/billing', label: 'Billing', icon: CreditCard },
-];
+]);
 </script>
 
 <template>
