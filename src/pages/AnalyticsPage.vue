@@ -3,10 +3,12 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { useAuth0 } from '@auth0/auth0-vue';
 import DashboardLayout from '@/components/layout/DashboardLayout.vue';
 import { Users, Eye, Clock, TrendingUp, TrendingDown, Minus, ExternalLink, RefreshCw } from 'lucide-vue-next';
-import { Chart, BarElement, CategoryScale, LinearScale, Tooltip } from 'chart.js';
+import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } from 'chart.js';
 import config from '@/config/dashboard';
 
-Chart.register(BarElement, CategoryScale, LinearScale, Tooltip);
+// BarController is required for type: 'bar'; without it Chart.js throws
+// "bar is not a registered controller".
+Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
 const { getAccessTokenSilently } = useAuth0();
 
@@ -129,6 +131,9 @@ async function fetchAnalytics() {
     current.value = await currentRes.json();
     previous.value = previousRes?.ok ? await previousRes.json() : null;
 
+    // The canvas only exists once the loading skeleton is gone, so drop it first;
+    // drawing on the next tick while still loading found no canvas and drew nothing.
+    loading.value = false;
     await nextTick();
     renderChart();
   } catch (err) {
