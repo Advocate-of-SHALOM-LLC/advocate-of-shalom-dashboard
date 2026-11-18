@@ -191,7 +191,7 @@ onBeforeUnmount(() => chart?.destroy());
         </section>
 
         <section v-if="notes" class="rep__section rep__notes">
-          <h3 class="rep__h">From your web team</h3>
+          <h3 class="rep__h">From Eric</h3>
           <template v-for="part in noteParts(notes)" :key="part.title">
             <h4 class="rep__h4">{{ part.title }}</h4>
             <template v-for="(block, i) in part.blocks" :key="i">

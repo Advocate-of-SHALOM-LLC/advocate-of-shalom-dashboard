@@ -4,7 +4,7 @@ import { reportTimeZone } from '../lib/google';
 import config from '../../src/config/dashboard';
 
 /**
- * "From your web team" on the overview: the web team's latest published
+ * "From Eric" on the overview: the web team's latest published
  * monthly note and the next maintenance day on the agency's calendar.
  *
  * Read only, from the agency's own tables (monthly_reports, time_blocks),
@@ -57,6 +57,6 @@ export async function handler(event: { headers: Record<string, string> }) {
     });
   } catch (err) {
     console.error('web-team failed:', err instanceof Error ? err.message : err);
-    return json(500, { error: 'Your web team’s notes could not be loaded.' });
+    return json(500, { error: 'Eric’s notes could not be loaded.' });
   }
 }

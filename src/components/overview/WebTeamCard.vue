@@ -31,7 +31,7 @@ const nextVisit = computed(() => {
 <template>
   <section class="card team" aria-labelledby="team-title">
     <div class="card__head">
-      <h2 id="team-title" class="card__title"><HeartHandshake :size="18" aria-hidden="true" /> From your web team</h2>
+      <h2 id="team-title" class="card__title"><HeartHandshake :size="18" aria-hidden="true" /> From Eric</h2>
       <RouterLink v-if="note" to="/reports" class="card__link">In the report &rarr;</RouterLink>
     </div>
 
@@ -53,7 +53,7 @@ const nextVisit = computed(() => {
         </div>
       </figure>
       <p v-else class="card__empty">
-        Each month your web team adds a short note here: what was done on your site and what's planned next.
+        Each month I add a short note here: what I did on your site and what's planned next.
       </p>
 
       <p v-if="nextVisit" class="team__visit">

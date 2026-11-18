@@ -108,7 +108,7 @@ onMounted(load);
           <MonthToDate :month="month" :state="monthState" :this-month="submissions?.thisMonth ?? null" />
           <MonthlyReportWidget />
         </div>
-        <aside class="overview__side" aria-label="Latest activity, your web team and site health">
+        <aside class="overview__side" aria-label="Latest activity, notes from Eric and site health">
           <RecentSubmissions v-if="hasInbox" :submissions="submissions" :loaded="submissionsLoaded" />
           <WebTeamCard :web-team="webTeam" :state="webTeamState" />
           <SiteHealth :lighthouse="lighthouse" :state="healthState" />
