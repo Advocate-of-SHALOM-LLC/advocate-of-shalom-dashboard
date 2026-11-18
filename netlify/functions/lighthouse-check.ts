@@ -42,11 +42,16 @@ export default async () => {
   const check = await runLighthouse(missing);
   if (!check) return new Response('no result', { status: 502 });
 
-  if (existing) {
-    await completeLighthouse(db, existing.id, {
-      ...existing.check,
-      mobile: existing.check.mobile ?? check.mobile,
-      desktop: existing.check.desktop ?? check.desktop,
+  // A test takes most of a minute, and a scheduled function can occasionally
+  // be started twice at once (Nov 2 2026 saved two tests 11s apart). Look
+  // again before saving, so a run that finished first is completed, not
+  // duplicated.
+  const latest = (await firstLighthouseRow(db, start, end)) ?? existing;
+  if (latest) {
+    await completeLighthouse(db, latest.id, {
+      ...latest.check,
+      mobile: latest.check.mobile ?? check.mobile,
+      desktop: latest.check.desktop ?? check.desktop,
     });
   } else {
     await saveLighthouse(db, check);
