@@ -46,7 +46,7 @@ const config: DashboardConfig = {
     },
     {
       "label": "Sanity Studio",
-      "url": "https://advocate-of-shalom.sanity.studio",
+      "url": "https://studio.advocateofshalom.com",
       "emoji": "✏️",
       "description": "Edit your content"
     },
