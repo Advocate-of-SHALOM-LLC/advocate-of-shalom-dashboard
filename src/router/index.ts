@@ -4,6 +4,7 @@ import { useAuth0 } from '@auth0/auth0-vue';
 
 const DashboardHome = () => import('@/pages/DashboardHome.vue');
 const ReportsPage = () => import('@/pages/ReportsPage.vue');
+const SubmissionsPage = () => import('@/pages/SubmissionsPage.vue');
 const ClientsPage = () => import('@/pages/ClientsPage.vue');
 const FinancesPage = () => import('@/pages/FinancesPage.vue');
 const AnalyticsPage = () => import('@/pages/AnalyticsPage.vue');
@@ -15,6 +16,7 @@ const NotFound = () => import('@/pages/NotFound.vue');
 const routes = [
   { path: '/', name: 'Dashboard', component: DashboardHome },
   { path: '/reports', name: 'Reports', component: ReportsPage },
+  { path: '/submissions', name: 'Submissions', component: SubmissionsPage },
   { path: '/clients', name: 'Clients', component: ClientsPage },
   { path: '/finances', name: 'Finances', component: FinancesPage },
   { path: '/analytics', name: 'Analytics', component: AnalyticsPage },

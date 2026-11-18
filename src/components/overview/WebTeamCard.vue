@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { HeartHandshake, CalendarDays, Loader2 } from 'lucide-vue-next';
 import type { WebTeam } from '@/composables/useOverview';
 import { monthName } from '@/composables/useReports';
+import { noteParts } from '@/lib/notes';
 
 /**
  * The work behind the website, on the page the client sees first: the web
@@ -14,6 +15,7 @@ import { monthName } from '@/composables/useReports';
 const props = defineProps<{ webTeam: WebTeam | null; state: 'loading' | 'ready' | 'error' }>();
 
 const note = computed(() => props.webTeam?.note ?? null);
+const parts = computed(() => noteParts(note.value));
 
 const nextVisit = computed(() => {
   const iso = props.webTeam?.nextVisit;
@@ -40,7 +42,15 @@ const nextVisit = computed(() => {
     <template v-else>
       <figure v-if="note" class="team__note">
         <figcaption class="team__when">{{ monthName(note.month) }}</figcaption>
-        <blockquote class="team__quote">{{ note.summary || note.recommendations }}</blockquote>
+        <div v-for="part in parts" :key="part.title" class="team__part">
+          <h3 class="team__part-title">{{ part.title }}</h3>
+          <template v-for="(block, i) in part.blocks" :key="i">
+            <ul v-if="block.list" class="team__list">
+              <li v-for="line in block.lines" :key="line">{{ line }}</li>
+            </ul>
+            <p v-else class="team__text">{{ block.lines[0] }}</p>
+          </template>
+        </div>
       </figure>
       <p v-else class="card__empty">
         Each month your web team adds a short note here: what was done on your site and what's planned next.
@@ -62,10 +72,11 @@ const nextVisit = computed(() => {
 
 .team__note { margin: 0; padding: 0.9rem 1rem; border-radius: var(--border-radius); background-color: var(--color-bg); border-left: 3px solid var(--color-accent); }
 .team__when { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
-.team__quote {
-  margin: 0.35rem 0 0; font-size: 0.9375rem; line-height: 1.55; color: var(--color-text); white-space: pre-line;
-  display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden;
-}
+.team__part { margin-top: 0.75rem; }
+.team__part-title { margin: 0 0 0.3rem; font-size: 0.8125rem; font-weight: 700; color: var(--color-text); }
+.team__list { margin: 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
+.team__list li, .team__text { font-size: 0.9375rem; line-height: 1.5; color: var(--color-text); }
+.team__text { margin: 0 0 0.3rem; }
 .team__visit {
   display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--color-border);
   font-size: 0.875rem; font-weight: 600; color: var(--color-text);

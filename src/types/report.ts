@@ -19,7 +19,8 @@ export interface MonthlyReport {
   } | null;
   series: { day: string; visits: number }[];
   inquiries: {
-    kinds: { kind: string; label: string; count: number; prev: number }[];
+    /** prev is null when the month before predates the inbox, or was its partial first month. */
+    kinds: { kind: string; label: string; count: number; prev: number | null }[];
     stillNew: number;
     phoneEmailTaps: number | null;
   } | null;

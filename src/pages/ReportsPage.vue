@@ -5,6 +5,7 @@ import { FileBarChart, Printer, RefreshCw, Loader2 } from 'lucide-vue-next';
 import { Chart, BarController, BarElement, CategoryScale, LinearScale, Tooltip } from 'chart.js';
 import { useReports, monthName, nextReportDate, changeWords, changeDirection } from '@/composables/useReports';
 import { describeSources } from '@/lib/sources';
+import { noteParts } from '@/lib/notes';
 
 Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip);
 
@@ -191,10 +192,14 @@ onBeforeUnmount(() => chart?.destroy());
 
         <section v-if="notes" class="rep__section rep__notes">
           <h3 class="rep__h">From your web team</h3>
-          <p v-if="notes.summary" class="rep__prose">{{ notes.summary }}</p>
-          <template v-if="notes.recommendations">
-            <h4 class="rep__h4">Recommendations</h4>
-            <p class="rep__prose">{{ notes.recommendations }}</p>
+          <template v-for="part in noteParts(notes)" :key="part.title">
+            <h4 class="rep__h4">{{ part.title }}</h4>
+            <template v-for="(block, i) in part.blocks" :key="i">
+              <ul v-if="block.list" class="rep__highlights">
+                <li v-for="line in block.lines" :key="line">{{ line }}</li>
+              </ul>
+              <p v-else class="rep__prose">{{ block.lines[0] }}</p>
+            </template>
           </template>
         </section>
 

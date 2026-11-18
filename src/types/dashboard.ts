@@ -76,13 +76,17 @@ export interface DashboardAnnouncement {
 /**
  * A kind of form submission the client's site saves to the inbox, e.g.
  * { kind: 'contact', singular: 'inquiry', plural: 'inquiries' }. Drives the
- * report's "People getting in touch" section; an empty list means the site
- * has no inbox yet and that section is left out.
+ * Form Submissions page's tabs and labels, the overview's "N new …" items and
+ * counts, and the report's "People getting in touch" section; an empty list
+ * means the site has no inbox yet and all of those are left out.
  */
 export interface SubmissionKind {
+  /** The stored kind: 'contact', 'application' or 'other'. */
   kind: string;
   singular: string;
   plural: string;
+  /** Badge and avatar colour. Defaults to 'primary'. */
+  tone?: 'primary' | 'accent';
 }
 
 export interface DashboardConfig {
@@ -119,6 +123,11 @@ export interface DashboardConfig {
   analytics?: AnalyticsConfig;
   /** See SubmissionKind. Empty until the site saves its form submissions. */
   submissionKinds?: SubmissionKind[];
+  /**
+   * YYYY-MM the inbox began. Reports leave out submissions for earlier months
+   * rather than showing zero, and never compare against this partial month.
+   */
+  submissionsSince?: string;
   /**
    * The only sign-ins that can open the client's private business records
    * (client records, P&L). Enforced by the server functions; the menu also

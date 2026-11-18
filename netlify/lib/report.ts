@@ -42,7 +42,8 @@ export interface MonthlyReport {
   series: { day: string; visits: number }[];
   /** Null when this client has no submissions inbox. */
   inquiries: {
-    kinds: { kind: string; label: string; count: number; prev: number }[];
+    /** prev is null when the month before predates the inbox, or was its partial first month. */
+    kinds: { kind: string; label: string; count: number; prev: number | null }[];
     /** Of this month's submissions, how many nobody has picked up yet. */
     stillNew: number;
     /** Null until the site sends tap events, so "not measured" never reads as zero. */
@@ -163,6 +164,11 @@ async function inquiries(db: Client, month: string): Promise<MonthlyReport['inqu
   const kinds = config.submissionKinds ?? [];
   // No inbox yet: the section is left out rather than reporting zero.
   if (!kinds.length) return null;
+  // Nor for months before the inbox began. Its first month is partial, so it
+  // is never the "month before" in a comparison (OVERVIEW-STANDARD.md 4.4).
+  const since = config.submissionsSince;
+  if (since && month < since) return null;
+  const comparable = !since || shiftMonth(month, -1) > since;
 
   const count = async (m: string) => {
     const from = localMidnightUtc(monthBounds(m).start);
@@ -185,7 +191,7 @@ async function inquiries(db: Client, month: string): Promise<MonthlyReport['inqu
       kind: k.kind,
       label: k.plural,
       count: sum(now, (r) => r.kind === k.kind),
-      prev: sum(before, (r) => r.kind === k.kind),
+      prev: comparable ? sum(before, (r) => r.kind === k.kind) : null,
     })),
     stillNew: sum(now, (r) => r.status === 'new'),
     phoneEmailTaps: null,

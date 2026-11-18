@@ -4,13 +4,19 @@ import { RouterLink } from 'vue-router';
 import { Activity, Loader2 } from 'lucide-vue-next';
 import type { MonthToDate } from '@/composables/useOverview';
 import { changeWords, changeDirection, monthName } from '@/composables/useReports';
+import { submissionKinds, capitalize } from '@/lib/submissions';
 
 /**
  * The live half of the overview: this month so far, set against the same
  * days of last month (OVERVIEW-STANDARD.md 3.3). The monthly report below is
  * the settled version of this.
  */
-const props = defineProps<{ month: MonthToDate | null; state: 'loading' | 'ready' | 'none' }>();
+const props = defineProps<{
+  month: MonthToDate | null;
+  state: 'loading' | 'ready' | 'none';
+  /** This month's form submissions per kind, from the inbox (not analytics); null until loaded. */
+  thisMonth?: Record<string, number> | null;
+}>();
 
 const title = new Date().toLocaleDateString('en-US', { month: 'long' });
 
@@ -45,6 +51,9 @@ const stats = computed(() => {
   const m = props.month;
   if (!m) return [];
   return [
+    ...(props.thisMonth
+      ? submissionKinds.map((k) => ({ label: capitalize(k.plural), value: (props.thisMonth?.[k.kind] ?? 0).toLocaleString() }))
+      : []),
     ...(m.lastMonth ? [{ label: `All of ${monthName(m.lastMonth.month).split(' ')[0]}`, value: `${m.lastMonth.visits.toLocaleString()} ${m.label}` }] : []),
     ...(m.current.avgSeconds !== null ? [{ label: 'Avg. time per visit', value: formatDuration(m.current.avgSeconds) }] : []),
   ];

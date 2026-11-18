@@ -58,7 +58,10 @@ const config: DashboardConfig = {
     }
   ],
   "contentEditors": [],
-  "submissionKinds": [],
+  "submissionKinds": [
+    { "kind": "contact", "singular": "contact message", "plural": "contact messages", "tone": "primary" }
+  ],
+  "submissionsSince": "2026-11",
   "privateDataAccess": ["elyse@advocateofshalom.com", "eric@ericphiferllc.com"],
   "billing": {
     "stripeCustomerId": "cus_UVmyRmEDdIrC1H",

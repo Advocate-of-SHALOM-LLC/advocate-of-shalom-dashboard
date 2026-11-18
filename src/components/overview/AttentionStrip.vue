@@ -1,19 +1,34 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
-import { Receipt, CheckCircle2 } from 'lucide-vue-next';
-import type { PendingCharge } from '@/composables/useOverview';
+import { Inbox, Receipt, CheckCircle2 } from 'lucide-vue-next';
+import type { PendingCharge, SubmissionSummary } from '@/composables/useOverview';
+import { submissionKinds, kindLabel } from '@/lib/submissions';
 
 /**
  * Only things the client should act on (OVERVIEW-STANDARD.md 3.2). Invoices
  * are counted as amounts due: paired invoices (alternative ways to pay the
  * same charges) are one item showing the full amount, as on the Billing page.
- * Submission items join this list once the site has a submissions inbox.
+ * New form submissions come first: one item per configured kind with any new.
  */
-const props = defineProps<{ charges: PendingCharge[]; loaded: boolean }>();
+const props = defineProps<{ submissions: SubmissionSummary | null; charges: PendingCharge[]; loaded: boolean }>();
 
 const money = (cents: number, currency: string) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(cents / 100);
+
+const newOf = (kind: string) =>
+  (props.submissions?.counts ?? []).filter((c) => c.kind === kind && c.status === 'new').reduce((sum, c) => sum + c.n, 0);
+
+const submissionItems = computed(() =>
+  submissionKinds
+    .map((k) => ({ kind: k.kind, n: newOf(k.kind) }))
+    .filter((k) => k.n > 0)
+    .map((k) => ({
+      key: `new-${k.kind}`,
+      text: `${k.n} new ${kindLabel(k.kind, k.n)}`,
+      to: `/submissions?kind=${k.kind}&status=new`,
+    }))
+);
 
 const items = computed(() => {
   const groups = new Map<string, PendingCharge>();
@@ -34,7 +49,17 @@ const items = computed(() => {
 
 <template>
   <section aria-label="Needs your attention">
-    <ul v-if="items.length" class="attn">
+    <ul v-if="submissionItems.length || items.length" class="attn">
+      <li v-for="item in submissionItems" :key="item.key">
+        <RouterLink :to="item.to" class="attn__item attn__item--inbox">
+          <span class="attn__icon"><Inbox :size="18" aria-hidden="true" /></span>
+          <span class="attn__text">
+            <span class="attn__label">Waiting for a reply</span>
+            {{ item.text }}
+          </span>
+          <span class="attn__action">Review &rarr;</span>
+        </RouterLink>
+      </li>
       <li v-for="item in items" :key="item.key">
         <RouterLink to="/billing" class="attn__item">
           <span class="attn__icon"><Receipt :size="18" aria-hidden="true" /></span>
@@ -68,5 +93,7 @@ const items = computed(() => {
 .attn__text { flex: 1; display: flex; flex-direction: column; font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
 .attn__label { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-text-secondary); }
 .attn__action { font-size: 0.8125rem; font-weight: 600; color: var(--color-link); white-space: nowrap; }
+.attn__item--inbox, .attn__item--inbox:hover { border-left-color: var(--color-primary); }
+.attn__item--inbox .attn__icon { background-color: color-mix(in srgb, var(--color-primary) 12%, transparent); color: var(--color-primary); }
 .attn__clear { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9375rem; color: var(--color-up); font-weight: 500; }
 </style>

@@ -8,6 +8,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { useAuth0 } from '@auth0/auth0-vue';
 import {
   LayoutDashboard,
+  Inbox,
   Users,
   Wallet,
   FileBarChart,
@@ -23,6 +24,7 @@ import {
   ChevronRight,
 } from 'lucide-vue-next';
 import config from '@/config/dashboard';
+import { hasInbox } from '@/lib/submissions';
 
 defineProps<{ mobileOpen: boolean }>();
 const emit = defineEmits<{ (e: 'toggle-mobile'): void }>();
@@ -62,6 +64,7 @@ const canSeePrivate = computed(() => {
 
 const navItems = computed<NavItem[]>(() => [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
+  ...(hasInbox ? [{ to: '/submissions', label: 'Form Submissions', icon: Inbox }] : []),
   { to: '/reports', label: 'Monthly Reports', icon: FileBarChart },
   ...(canSeePrivate.value
     ? [

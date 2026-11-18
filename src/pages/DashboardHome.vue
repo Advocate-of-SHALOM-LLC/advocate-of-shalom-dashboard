@@ -7,26 +7,29 @@ import OverviewGreeting from '@/components/overview/OverviewGreeting.vue';
 import AttentionStrip from '@/components/overview/AttentionStrip.vue';
 import MonthToDate from '@/components/overview/MonthToDate.vue';
 import WebTeamCard from '@/components/overview/WebTeamCard.vue';
+import RecentSubmissions from '@/components/overview/RecentSubmissions.vue';
 import SiteHealth from '@/components/overview/SiteHealth.vue';
 import MonthlyReportWidget from '@/components/widgets/MonthlyReportWidget.vue';
 import TutorialsWidget from '@/components/widgets/TutorialsWidget.vue';
 import ContentEditorWidget from '@/components/widgets/ContentEditorWidget.vue';
 import { useOverview } from '@/composables/useOverview';
 import config from '@/config/dashboard';
+import { hasInbox } from '@/lib/submissions';
 
 /**
  * The page the client lands on, read top to bottom (OVERVIEW-STANDARD.md):
  *
  *   1. who it's for, and the things they came to do (greeting, quick actions)
- *   2. anything waiting on them (an amount due)
+ *   2. anything waiting on them (new messages, an amount due)
  *   3. how this month is going, live
  *   4. how last month went, settled (the monthly report)
- *   …with the web team's latest note and the site's health alongside.
+ *   …with the latest form submissions, the web team's latest note and the
+ *   site's health alongside.
  *
  * Links and the analytics summary used to sit here as separate widgets; their
  * content now lives in the greeting and the month-so-far card.
  */
-const { month, monthState, lighthouse, healthState, webTeam, webTeamState, charges, chargesLoaded, load } = useOverview();
+const { submissions, submissionsLoaded, month, monthState, lighthouse, healthState, webTeam, webTeamState, charges, chargesLoaded, load } = useOverview();
 
 /** Optional extras some clients have; none are enabled for this client today. */
 const extras = computed(() =>
@@ -98,14 +101,15 @@ onMounted(load);
         </a>
       </div>
 
-      <AttentionStrip :charges="charges" :loaded="chargesLoaded" />
+      <AttentionStrip :submissions="submissions" :charges="charges" :loaded="chargesLoaded && submissionsLoaded" />
 
       <div class="overview__columns">
         <div class="overview__main">
-          <MonthToDate :month="month" :state="monthState" />
+          <MonthToDate :month="month" :state="monthState" :this-month="submissions?.thisMonth ?? null" />
           <MonthlyReportWidget />
         </div>
-        <aside class="overview__side" aria-label="Your web team and site health">
+        <aside class="overview__side" aria-label="Latest activity, your web team and site health">
+          <RecentSubmissions v-if="hasInbox" :submissions="submissions" :loaded="submissionsLoaded" />
           <WebTeamCard :web-team="webTeam" :state="webTeamState" />
           <SiteHealth :lighthouse="lighthouse" :state="healthState" />
         </aside>

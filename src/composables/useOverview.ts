@@ -2,6 +2,14 @@ import { ref } from 'vue';
 import { useApi } from '@/composables/useApi';
 import config from '@/config/dashboard';
 import type { LighthouseCheck } from '@/types/report';
+import { hasInbox } from '@/lib/submissions';
+
+/** form-submissions?summary=1: what's waiting, this month's counts and the five newest. */
+export interface SubmissionSummary {
+  counts: { kind: string; status: string; n: number }[];
+  thisMonth: Record<string, number>;
+  recent: { id: string; kind: string; name: string | null; email: string | null; status: string; createdAt: string }[];
+}
 
 /** This month so far, from analytics-proxy?period=mtd. */
 export interface MonthToDate {
@@ -37,6 +45,8 @@ export interface PendingCharge {
 export function useOverview() {
   const api = useApi();
 
+  const submissions = ref<SubmissionSummary | null>(null);
+  const submissionsLoaded = ref(!hasInbox);
   const month = ref<MonthToDate | null>(null);
   const monthState = ref<'loading' | 'ready' | 'none'>('loading');
   const lighthouse = ref<LighthouseCheck | null>(null);
@@ -55,6 +65,14 @@ export function useOverview() {
 
   async function load() {
     await Promise.allSettled([
+      hasInbox
+        ? json('form-submissions?summary=1')
+            .then((d) => {
+              if (d.configured !== false) submissions.value = d as SubmissionSummary;
+            })
+            .catch(() => {})
+            .finally(() => (submissionsLoaded.value = true))
+        : Promise.resolve(),
       json('analytics-proxy?period=mtd')
         .then((d) => {
           month.value = d.configured && d.current ? (d as MonthToDate) : null;
@@ -82,5 +100,5 @@ export function useOverview() {
     ]);
   }
 
-  return { month, monthState, lighthouse, healthState, webTeam, webTeamState, charges, chargesLoaded, load };
+  return { submissions, submissionsLoaded, month, monthState, lighthouse, healthState, webTeam, webTeamState, charges, chargesLoaded, load };
 }
